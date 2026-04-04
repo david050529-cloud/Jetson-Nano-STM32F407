@@ -1,0 +1,5 @@
+float32 roll
+float32 pitch
+float32 yaw
+float32 motor1_actual_rps
+float32 motor2_actual_rps

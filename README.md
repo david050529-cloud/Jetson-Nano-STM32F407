@@ -40,4 +40,13 @@ ros2 run rqt_image_view rqt_image_view
 /dev/ttyTSH1
 ```
 
+## C/C++配置
+```
+${workspaceFolder}/**
+/opt/ros/${ROS_DISTRO}/include**
+/opt/ros/humble/include/rosidl_runtime_cpp
+/opt/ros/humble/include/rclcpp
+/opt/ros/humble/include/std_msgs
+```
+
 ---

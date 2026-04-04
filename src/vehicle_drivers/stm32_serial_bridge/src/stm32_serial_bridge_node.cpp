@@ -6,8 +6,8 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/header.hpp"
-#include "balance_bot_comm/msg/motor_servo_cmd.hpp"
-#include "balance_bot_comm/msg/telemetry.hpp"
+#include "stm32_serial_bridge/msg/motor_servo_cmd.hpp"
+#include "stm32_serial_bridge/msg/telemetry.hpp"
 #include <serial/serial.h>
 
 // 与下位机完全一致的结构体定义（必须packed）
@@ -62,12 +62,12 @@ public:
         }
 
         // 订阅指令主题
-        cmd_sub_ = this->create_subscription<balance_bot_comm::msg::MotorServoCmd>(
+        cmd_sub_ = this->create_subscription<stm32_serial_bridge::msg::MotorServoCmd>(
             "motor_servo_cmd", 10,
             std::bind(&BalanceBotCommNode::cmdCallback, this, std::placeholders::_1));
 
         // 发布遥测主题
-        telemetry_pub_ = this->create_publisher<balance_bot_comm::msg::Telemetry>("telemetry", 10);
+        telemetry_pub_ = this->create_publisher<stm32_serial_bridge::msg::Telemetry>("telemetry", 10);
 
         // 启动接收线程
         recv_thread_ = std::thread(&BalanceBotCommNode::receiveLoop, this);
@@ -83,7 +83,7 @@ public:
     }
 
 private:
-    void cmdCallback(const balance_bot_comm::msg::MotorServoCmd::SharedPtr msg)
+    void cmdCallback(const stm32_serial_bridge::msg::MotorServoCmd::SharedPtr msg)
     {
         CommandPacket packet;
         packet.motor1_target_rps = msg->motor1_target_rps;
@@ -106,7 +106,7 @@ private:
                 TelemetryPacket raw;
                 std::memcpy(&raw, buffer, sizeof(raw));
 
-                auto msg = balance_bot_comm::msg::Telemetry();
+                auto msg = stm32_serial_bridge::msg::Telemetry();
                 msg.roll = raw.roll;
                 msg.pitch = raw.pitch;
                 msg.yaw = raw.yaw;
@@ -128,8 +128,8 @@ private:
     std::thread recv_thread_;
     std::atomic<bool> running_{true};
 
-    rclcpp::Subscription<balance_bot_comm::msg::MotorServoCmd>::SharedPtr cmd_sub_;
-    rclcpp::Publisher<balance_bot_comm::msg::Telemetry>::SharedPtr telemetry_pub_;
+    rclcpp::Subscription<stm32_serial_bridge::msg::MotorServoCmd>::SharedPtr cmd_sub_;
+    rclcpp::Publisher<stm32_serial_bridge::msg::Telemetry>::SharedPtr telemetry_pub_;
 };
 
 int main(int argc, char **argv)

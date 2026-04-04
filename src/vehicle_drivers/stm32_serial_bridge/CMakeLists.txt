@@ -24,7 +24,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 
 # 添加可执行文件
 add_executable(stm32_serial_bridge_node src/stm32_serial_bridge_node.cpp)
-ament_target_dependencies(stm32_serial_bridge
+ament_target_dependencies(stm32_serial_bridge_node
   rclcpp
   std_msgs
   serial

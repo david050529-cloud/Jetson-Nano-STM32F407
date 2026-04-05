@@ -1,28 +1,25 @@
 #include "rclcpp/rclcpp.hpp"
-#include "std_msgs/msg/string.hpp"
+#include "sensor_msgs/msg/nav_sat_fix.hpp"
 
 class GpsSubscriberNode : public rclcpp::Node
 {
 public:
   GpsSubscriberNode() : Node("gps_subscriber_node")
   {
-    subscriber_ = this->create_subscription<std_msgs::msg::String>(
-      "gps/gps_data",
-      10,
-      std::bind(&GpsSubscriberNode::subscribe_gps_data, this, std::placeholders::_1)
-    );
+    sub_ = this->create_subscription<sensor_msgs::msg::NavSatFix>(
+        "/gps/fix", 10,
+        [this](const sensor_msgs::msg::NavSatFix::SharedPtr msg)
+        {
+          RCLCPP_INFO(this->get_logger(), "GPS Fix: lat=%.6f, lon=%.6f, alt=%.1f",
+                      msg->latitude, msg->longitude, msg->altitude);
+        });
   }
 
 private:
-  void subscribe_gps_data(const std_msgs::msg::String::SharedPtr msg)
-  {
-    RCLCPP_INFO(this->get_logger(), "Received GPS data: %s", msg->data.c_str());
-  }
-
-  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr subscriber_;
+  rclcpp::Subscription<sensor_msgs::msg::NavSatFix>::SharedPtr sub_;
 };
 
-int main(int argc, char * argv[])
+int main(int argc, char *argv[])
 {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<GpsSubscriberNode>();

@@ -7,7 +7,8 @@
                 "/opt/ros/${ROS_DISTRO}/include**",
                 "/opt/ros/humble/include/rosidl_runtime_cpp",
                 "/opt/ros/humble/include/rclcpp",
-                "/opt/ros/humble/include/std_msgs"
+                "/opt/ros/humble/include/std_msgs",
+                "/opt/ros/humble/include/sensor_msgs"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",

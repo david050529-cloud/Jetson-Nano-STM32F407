@@ -11,6 +11,7 @@
 
     <depend>rclcpp</depend>
     <depend>std_msgs</depend>
+    <depend>sensor_msgs</depend>
 
     <!-- launch文件支持 -->
     <exec_depend>ros2launch</exec_depend>

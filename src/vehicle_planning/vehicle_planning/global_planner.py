@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped, Point
-from nav_msgs.msg import Path
+from nav_msgs.msg import Path, Odometry   # 添加 Odometry
 import math
 
 class GlobalPlanner(Node):

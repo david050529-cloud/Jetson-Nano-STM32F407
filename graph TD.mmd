@@ -1,0 +1,34 @@
+graph TD
+
+subgraph Drivers
+    GPS["gps_node"]
+    IMU["imu_node"]
+    LiDAR["lidar_node"]
+end
+
+subgraph Perception
+    Obstacle["obstacle_detector"]
+    Road["road_detector"]
+    Traffic["traffic_sign_detector"]
+end
+
+subgraph Planning
+    Global["global_planner"]
+    Local["local_planner"]
+end
+
+subgraph Control
+    ControlNode["vehicle_control"]
+end
+
+Bringup["vehicle_bringup"]
+
+GPS --> Perception
+IMU --> Perception
+LiDAR --> Perception
+Perception --> Planning
+Planning --> ControlNode
+Bringup --> Drivers
+Bringup --> Perception
+Bringup --> Planning
+Bringup --> ControlNode

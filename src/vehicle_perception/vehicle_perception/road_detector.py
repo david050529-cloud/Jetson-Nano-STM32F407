@@ -20,13 +20,12 @@ class RoadDetector(Node):
     def image_callback(self, msg):
         cv_image = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
         results = self.model(cv_image, task='segment')
-        if len(results) > 0:
-            mask = results[0].masks.data[0].cpu().numpy()  # 假设单通道mask
-            # 根据mask中像素值判断主要道路类型（简单阈值）
+        road_type = 'unknown'   # 默认值
+        if len(results) > 0 and results[0].masks is not None:
+            mask = results[0].masks.data[0].cpu().numpy()
             paved_ratio = np.sum(mask > 0.5) / mask.size
             road_type = 'paved' if paved_ratio > 0.7 else 'unpaved'
             self.pub_road_type.publish(String(data=road_type))
-            # 发布mask图像
             mask_img = (mask * 255).astype(np.uint8)
             self.pub_road_mask.publish(self.bridge.cv2_to_imgmsg(mask_img, 'mono8'))
         self.get_logger().info(f'Road type: {road_type}')

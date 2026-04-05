@@ -1,8 +1,10 @@
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Twist, Point
+from geometry_msgs.msg import Twist
 from nav_msgs.msg import Path, Odometry
 from visualization_msgs.msg import MarkerArray
+from std_msgs.msg import String
+from stm32_serial_bridge.msg import MotorServoCmd   # 新增
 import numpy as np
 import math
 
@@ -13,7 +15,8 @@ class SimpleDWAPlanner(Node):
         self.sub_odom = self.create_subscription(Odometry, '/localization/odometry', self.odom_callback, 10)
         self.sub_obstacles = self.create_subscription(MarkerArray, '/perception/obstacles_markers', self.obstacle_callback, 10)
         self.sub_road_type = self.create_subscription(String, '/perception/road_type', self.road_callback, 10)
-        self.pub_cmd = self.create_publisher(Twist, '/cmd_vel', 10)
+        # 改为发布 MotorServoCmd
+        self.pub_cmd = self.create_publisher(MotorServoCmd, '/motor_servo_cmd', 10)
         self.timer = self.create_timer(0.1, self.control_loop)
         self.global_path = []
         self.current_pose = None
@@ -42,41 +45,50 @@ class SimpleDWAPlanner(Node):
     def control_loop(self):
         if self.current_pose is None or not self.global_path:
             return
-        # 查找最近路径点
         px, py = self.current_pose.position.x, self.current_pose.position.y
         dists = [math.hypot(x-px, y-py) for x, y in self.global_path]
         closest_idx = np.argmin(dists)
         if closest_idx + 1 >= len(self.global_path):
-            return  # 到达终点
+            return
         target_x, target_y = self.global_path[closest_idx+1]
-        # 计算角度差
         dx = target_x - px
         dy = target_y - py
         angle_to_target = math.atan2(dy, dx)
         yaw = self.get_yaw_from_quaternion(self.current_pose.orientation)
         angle_diff = angle_to_target - yaw
         angle_diff = math.atan2(math.sin(angle_diff), math.cos(angle_diff))
-        # 避障检测：若有障碍物距离<1米，则减速并转向
+        
         avoid = False
         for ox, oy in self.obstacle_positions:
             dist = math.hypot(ox-px, oy-py)
             if dist < 1.0:
                 avoid = True
-                # 简单避障：转向远离障碍物方向
                 angle_to_obs = math.atan2(oy-py, ox-px)
                 diff_obs = angle_to_obs - yaw
                 if diff_obs > 0:
-                    angle_diff = -0.5  # 左转
+                    angle_diff = -0.5
                 else:
                     angle_diff = 0.5
                 break
-        # 输出速度
-        twist = Twist()
-        twist.linear.x = self.max_speed * (1.0 - 0.5*avoid)  # 避障时降速
-        twist.angular.z = max(-0.5, min(0.5, angle_diff * 1.5))  # P控制
-        self.pub_cmd.publish(twist)
+        
+        linear = self.max_speed * (1.0 - 0.5*avoid)
+        angular = max(-0.5, min(0.5, angle_diff * 1.5))
+        
+        # 构造 MotorServoCmd 消息
+        cmd = MotorServoCmd()
+        cmd.motor1_target_rps = linear   # 假设线速度映射到电机1转速
+        cmd.motor2_target_rps = linear   # 假设线速度映射到电机2转速
+        cmd.servo_angle = int(angular * 180 / math.pi)  # 角速度转舵机角度（示例）
+        self.pub_cmd.publish(cmd)
 
     def get_yaw_from_quaternion(self, q):
         siny_cosp = 2 * (q.w * q.z + q.x * q.y)
         cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
         return math.atan2(siny_cosp, cosy_cosp)
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = SimpleDWAPlanner()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()

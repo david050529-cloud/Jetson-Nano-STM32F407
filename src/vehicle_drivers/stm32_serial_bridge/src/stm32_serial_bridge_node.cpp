@@ -33,7 +33,7 @@ class BalanceBotCommNode : public rclcpp::Node
 {
 public:
     BalanceBotCommNode()
-        : Node("balance_bot_comm_node")
+        : Node("stm32_serial_bridge_node")
     {
         // 声明参数
         this->declare_parameter<std::string>("port", "/dev/ttyACM0");

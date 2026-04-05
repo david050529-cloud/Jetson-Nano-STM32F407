@@ -1,5 +1,5 @@
-float32 roll
-float32 pitch
-float32 yaw
-float32 motor1_actual_rps
-float32 motor2_actual_rps
+float32 roll          # 横滚角 (度)
+float32 pitch         # 俯仰角 (度)
+float32 yaw           # 偏航角 (度)
+float32 motor1_actual_rps   # 电机1实际转速 (转/秒)
+float32 motor2_actual_rps   # 电机2实际转速 (转/秒)

@@ -6,22 +6,22 @@ from launch.substitutions import LaunchConfiguration
 def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument(
-            'port', default_value='/dev/ttyACM0',
-            description='Serial port to communicate with STM32'
+            'serial_port', default_value='/dev/ttyACM0',
+            description='Serial port device'
         ),
         DeclareLaunchArgument(
-            'baudrate', default_value='115200',
-            description='Serial baudrate'
+            'baud_rate', default_value='115200',
+            description='Baud rate'
         ),
         Node(
             package='stm32_serial_bridge',
             executable='stm32_serial_bridge_node',
-            name='stm32_serial_bridge_node',
+            name='stm32_serial_bridge',
             output='screen',
             parameters=[{
-                'port': LaunchConfiguration('port'),
-                'baudrate': LaunchConfiguration('baudrate'),
-                'timeout_ms': 100
+                'serial_port': LaunchConfiguration('serial_port'),
+                'baud_rate': LaunchConfiguration('baud_rate'),
+                'serial_timeout_ms': 100
             }]
         )
     ])

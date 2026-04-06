@@ -1,25 +1,55 @@
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Twist
+from std_msgs.msg import String
 import serial
-import struct
 
-class CmdToSTM32(Node):
+class CommandConverter(Node):
     def __init__(self):
         super().__init__('cmd_converter')
-        self.sub = self.create_subscription(Twist, '/cmd_vel', self.cmd_callback, 10)
-        # 修改串口设备名
-        self.ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=0.1)
-        self.get_logger().info('STM32 serial opened')
+        self.declare_parameter('serial_port', '/dev/ttyUSB0')
+        self.declare_parameter('baud_rate', 9600)
+
+        self.serial_port = self.get_parameter('serial_port').get_parameter_value().string_value
+        self.baud_rate = self.get_parameter('baud_rate').get_parameter_value().integer_value
+
+        try:
+            self.serial = serial.Serial(self.serial_port, self.baud_rate, timeout=1)
+            self.get_logger().info(f"Serial port {self.serial_port} opened at {self.baud_rate} baud.")
+        except serial.SerialException as e:
+            self.get_logger().error(f"Failed to open serial port: {e}")
+            self.serial = None
+
+        self.subscription = self.create_subscription(
+            String,
+            'cmd_vel',
+            self.cmd_callback,
+            10
+        )
 
     def cmd_callback(self, msg):
-        linear = msg.linear.x
-        angular = msg.angular.z
-        # 打包为4字节float两个，加校验和简单处理
-        data = struct.pack('<ff', linear, angular)
-        checksum = sum(data) & 0xFF
-        self.ser.write(data + bytes([checksum]))
+        if self.serial:
+            try:
+                self.serial.write(msg.data.encode())
+                self.get_logger().info(f"Sent command: {msg.data}")
+            except serial.SerialException as e:
+                self.get_logger().error(f"Failed to send command: {e}")
 
-    def __del__(self):
-        if self.ser.is_open:
-            self.ser.close()
+    def destroy_node(self):
+        if self.serial:
+            self.serial.close()
+            self.get_logger().info("Serial port closed.")
+        super().destroy_node()
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = CommandConverter()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()

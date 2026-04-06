@@ -1,61 +1,66 @@
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import LaserScan
-from visualization_msgs.msg import MarkerArray, Marker
+from sensor_msgs.msg import PointCloud2
+from visualization_msgs.msg import MarkerArray
 import numpy as np
-import math
+import cv2
 
 class ObstacleDetector(Node):
     def __init__(self):
         super().__init__('obstacle_detector')
-        self.sub = self.create_subscription(LaserScan, '/scan', self.scan_callback, 10)
-        self.pub_markers = self.create_publisher(MarkerArray, '/perception/obstacles_markers', 10)
+        self.subscription = self.create_subscription(
+            PointCloud2,
+            'lidar_points',
+            self.lidar_callback,
+            10
+        )
+        self.publisher_ = self.create_publisher(MarkerArray, 'obstacle_markers', 10)
+        self.get_logger().info('Obstacle Detector Node has been started.')
 
-    def scan_callback(self, msg):
-        # 将激光雷达数据转换为障碍物点（笛卡尔坐标）
-        obstacles = []
-        angle = msg.angle_min
-        for r in msg.ranges:
-            if msg.range_min < r < msg.range_max and r < 1.5:  # 1.5米内障碍物
-                x = r * math.cos(angle)
-                y = r * math.sin(angle)
-                obstacles.append((x, y))
-            angle += msg.angle_increment
+    def lidar_callback(self, msg):
+        self.get_logger().info('Processing LiDAR data...')
+        # Example: Process LiDAR data (placeholder for actual implementation)
+        points = self.process_lidar_data(msg)
+        markers = self.generate_markers(points)
+        self.publisher_.publish(markers)
 
-        # 简单聚类：距离小于0.3米的点合并为一个障碍物
-        clusters = []
-        for obs in obstacles:
-            found = False
-            for cluster in clusters:
-                if math.hypot(obs[0] - cluster[0], obs[1] - cluster[1]) < 0.3:
-                    # 更新聚类中心
-                    cluster[0] = (cluster[0] + obs[0]) / 2
-                    cluster[1] = (cluster[1] + obs[1]) / 2
-                    found = True
-                    break
-            if not found:
-                clusters.append([obs[0], obs[1]])
+    def process_lidar_data(self, msg):
+        """Convert PointCloud2 to numpy array and process it."""
+        # Placeholder: Convert PointCloud2 to numpy array
+        points = np.random.rand(10, 3)  # Example data
+        return points
 
-        marker_array = MarkerArray()
-        for i, (cx, cy) in enumerate(clusters):
+    def generate_markers(self, points):
+        """Generate visualization markers for obstacles."""
+        markers = MarkerArray()
+        # Placeholder: Create markers from points
+        for i, point in enumerate(points):
             marker = Marker()
-            marker.header = msg.header
             marker.id = i
             marker.type = Marker.SPHERE
-            marker.action = Marker.ADD
-            marker.pose.position.x = cx
-            marker.pose.position.y = cy
-            marker.pose.position.z = 0.2
-            marker.scale.x = marker.scale.y = marker.scale.z = 0.3
+            marker.pose.position.x = point[0]
+            marker.pose.position.y = point[1]
+            marker.pose.position.z = point[2]
+            marker.scale.x = 0.2
+            marker.scale.y = 0.2
+            marker.scale.z = 0.2
             marker.color.a = 1.0
             marker.color.r = 1.0
             marker.color.g = 0.0
             marker.color.b = 0.0
-            marker_array.markers.append(marker)
-        self.pub_markers.publish(marker_array)
-        self.get_logger().debug(f"Detected {len(clusters)} obstacles")
+            markers.markers.append(marker)
+        return markers
 
 def main(args=None):
     rclpy.init(args=args)
     node = ObstacleDetector()
-    rclpy.spin(node)
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()

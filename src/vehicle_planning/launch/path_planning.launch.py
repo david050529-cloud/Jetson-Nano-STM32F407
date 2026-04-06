@@ -5,8 +5,11 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package='vehicle_planning',
-            executable='vehicle_planning.path_planner',  # Updated path to match new location
+            executable='path_planner',
             name='path_planner',
-            output='screen'
+            output='screen',
+            parameters=[
+                {'waypoint_file': '/path/to/waypoint.txt'}  # Dynamic parameter for waypoint file
+            ]
         )
     ])

@@ -69,8 +69,13 @@ ${workspaceFolder}/**\
   - **lidar_node**:
     - 提供激光雷达（LiDAR）数据的驱动和发布功能。
     - 包含`lidar.launch.py`和`sllidar_ros2.rviz`，用于启动LiDAR节点和可视化LiDAR数据。
+    -  ros2 launch lidar_node lidar.launch.py 
+    -  rviz2
   - **stm32_serial_bridge**:
     - 提供与STM32微控制器的串口通信功能。
+    - ros2 launch stm32_serial_bridge bridge_launch.py
+    - ros2 topic echo /telemetry
+    - ros2 topic pub /motor_commands stm32_serial_bridge/msg/MotorCommand "{motor1_target_rps: 1.0, motor2_target_rps: 1.0, servo_angle: 90}" -1
   - **vision_node**
     - 提供视觉相关的功能（具体实现未完全展示）。
     - 可能用于处理摄像头数据，支持感知或定位功能。

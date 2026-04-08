@@ -1,17 +1,22 @@
+# cmd_converter.py
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 import serial
 
 class CommandConverter(Node):
+    """命令转换节点：订阅字符串指令，通过串口发送（示例）"""
     def __init__(self):
         super().__init__('cmd_converter')
+
+        # 声明串口参数
         self.declare_parameter('serial_port', '/dev/ttyUSB0')
         self.declare_parameter('baud_rate', 9600)
 
         self.serial_port = self.get_parameter('serial_port').get_parameter_value().string_value
         self.baud_rate = self.get_parameter('baud_rate').get_parameter_value().integer_value
 
+        # 打开串口
         try:
             self.serial = serial.Serial(self.serial_port, self.baud_rate, timeout=1)
             self.get_logger().info(f"Serial port {self.serial_port} opened at {self.baud_rate} baud.")
@@ -19,6 +24,7 @@ class CommandConverter(Node):
             self.get_logger().error(f"Failed to open serial port: {e}")
             self.serial = None
 
+        # 订阅 cmd_vel 话题（实际应为更具体的控制指令，此处仅作示例）
         self.subscription = self.create_subscription(
             String,
             'cmd_vel',
@@ -27,6 +33,7 @@ class CommandConverter(Node):
         )
 
     def cmd_callback(self, msg):
+        """收到指令后通过串口发送字符串数据"""
         if self.serial:
             try:
                 self.serial.write(msg.data.encode())
@@ -35,6 +42,7 @@ class CommandConverter(Node):
                 self.get_logger().error(f"Failed to send command: {e}")
 
     def destroy_node(self):
+        """节点销毁时关闭串口"""
         if self.serial:
             self.serial.close()
             self.get_logger().info("Serial port closed.")

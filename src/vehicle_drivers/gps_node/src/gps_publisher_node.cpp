@@ -8,35 +8,44 @@
 #include <vector>
 #include <cmath>
 
+// 定义一个GPS发布节点类，继承自rclcpp::Node
 class GpsPublisherNode : public rclcpp::Node
 {
 public:
+  // 构造函数，初始化节点名称为"gps_publisher_node"
   GpsPublisherNode() : Node("gps_publisher_node")
   {
+    // 声明参数：串口端口和波特率
     this->declare_parameter<std::string>("port", "/dev/ttyUSB0");
     this->declare_parameter<int>("baudrate", 9600);
+
+    // 获取参数值
     std::string port = this->get_parameter("port").as_string();
     int baud = this->get_parameter("baudrate").as_int();
 
+    // 尝试打开串口
     try
     {
-      serial_.setPort(port);
-      serial_.setBaudrate(baud);
-      serial::Timeout timeout = serial::Timeout::simpleTimeout(100);
+      serial_.setPort(port);                                         // 设置串口端口
+      serial_.setBaudrate(baud);                                     // 设置波特率
+      serial::Timeout timeout = serial::Timeout::simpleTimeout(100); // 设置超时时间
       serial_.setTimeout(timeout);
-      serial_.open();
+      serial_.open(); // 打开串口
       RCLCPP_INFO(this->get_logger(), "GPS serial port %s opened", port.c_str());
     }
     catch (const std::exception &e)
     {
+      // 如果打开串口失败，记录错误日志并关闭节点
       RCLCPP_ERROR(this->get_logger(), "Failed to open GPS port: %s", e.what());
       rclcpp::shutdown();
       return;
     }
 
+    // 创建GPS数据的发布器
     fix_pub_ = this->create_publisher<sensor_msgs::msg::NavSatFix>("/gps/fix", 10);
     status_pub_ = this->create_publisher<sensor_msgs::msg::NavSatStatus>("/gps/status", 10);
 
+    // 创建定时器，用于定期发布数据
     timer_ = this->create_wall_timer(
         std::chrono::milliseconds(50),
         std::bind(&GpsPublisherNode::readAndPublish, this));

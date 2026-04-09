@@ -6,8 +6,8 @@ def generate_launch_description():
         # IMU驱动节点
         Node(
             package='imu_node',
-            executable='imu_driver_node',
-            name='imu_driver_node',
+            executable='imu_publisher_node',
+            name='imu_publisher_node',
             output='screen',
             parameters=[{
                 'use_sim_time': False

@@ -12,8 +12,8 @@ find_package(sensor_msgs REQUIRED)
 find_package(serial_driver REQUIRED)
 
 # IMU驱动节点
-add_executable(imu_driver_node src/imu_publisher_node.cpp)
-ament_target_dependencies(imu_driver_node 
+add_executable(imu_publisher_node src/imu_publisher_node.cpp)
+ament_target_dependencies(imu_publisher_node 
   rclcpp 
   sensor_msgs 
   serial_driver
@@ -28,7 +28,7 @@ ament_target_dependencies(imu_client_node
 
 # 安装可执行文件
 install(TARGETS
-  imu_driver_node
+  imu_publisher_node
   imu_client_node
   DESTINATION lib/${PROJECT_NAME}
 )

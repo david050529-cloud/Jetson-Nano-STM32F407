@@ -25,7 +25,10 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'path_planner = vehicle_planning.path_planner:main'
+            'path_planner = vehicle_planning.path_planner:main',
+            'global_planner = vehicle_planning.global_planner:main',
+            'local_planner = vehicle_planning.local_planner:main',
+            'waypoint_passer = vehicle_planning.waypoint_passer:main',
         ],
     },
 )

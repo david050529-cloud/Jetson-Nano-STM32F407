@@ -24,6 +24,9 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'obstacle_detector = vehicle_perception.obstacle_detector:main',
+            'traffic_light_detector = vehicle_perception.traffic_light_detector:main',
+            'road_detector = vehicle_perception.road_detector:main', 
         ],
     },
 )

@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'cmd_converter = vehicle_control.cmd_converter:main',
         ],
     },
 )

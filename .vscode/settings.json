@@ -1,0 +1,5 @@
+{
+    "python.analysis.extraPaths": [
+        "./install/stm32_serial_bridge/local/lib/python3.10/dist-packages"
+    ]
+}

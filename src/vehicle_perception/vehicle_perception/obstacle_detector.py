@@ -1,50 +1,59 @@
 # obstacle_detector.py
+import math
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import PointCloud2
-from visualization_msgs.msg import MarkerArray
-import numpy as np
-import cv2
+from sensor_msgs.msg import LaserScan
+from visualization_msgs.msg import Marker, MarkerArray
 
 class ObstacleDetector(Node):
-    """障碍物检测节点：处理LiDAR点云，生成可视化标记（示例实现）"""
+    """障碍物检测节点：处理2D激光雷达扫描数据，生成可视化标记"""
     def __init__(self):
         super().__init__('obstacle_detector')
-        # 订阅激光雷达点云
+        # 订阅激光雷达2D扫描（lidar_node 实际发布的 topic 和类型）
         self.subscription = self.create_subscription(
-            PointCloud2,
-            'lidar_points',
+            LaserScan,
+            '/scan',
             self.lidar_callback,
             10
         )
-        # 发布障碍物标记（用于可视化）
-        self.publisher_ = self.create_publisher(MarkerArray, 'obstacle_markers', 10)
+        # 发布障碍物标记，topic 名称与 local_planner 订阅保持一致
+        self.publisher_ = self.create_publisher(MarkerArray, '/perception/obstacles_markers', 10)
+        # 有效测距范围（米）
+        self.declare_parameter('min_range', 0.1)
+        self.declare_parameter('max_range', 10.0)
         self.get_logger().info('Obstacle Detector Node has been started.')
 
-    def lidar_callback(self, msg):
-        self.get_logger().info('Processing LiDAR data...')
-        # 处理点云数据（实际实现需根据点云格式转换）
-        points = self.process_lidar_data(msg)
-        markers = self.generate_markers(points)
+    def lidar_callback(self, msg: LaserScan):
+        """将 LaserScan 转换为笛卡尔坐标并发布障碍物标记"""
+        min_range = self.get_parameter('min_range').value
+        max_range = self.get_parameter('max_range').value
+
+        points = []
+        angle = msg.angle_min
+        for r in msg.ranges:
+            if min_range < r < max_range and math.isfinite(r):
+                x = r * math.cos(angle)
+                y = r * math.sin(angle)
+                points.append((x, y))
+            angle += msg.angle_increment
+
+        markers = self._build_markers(points, msg.header)
         self.publisher_.publish(markers)
 
-    def process_lidar_data(self, msg):
-        """将PointCloud2转换为numpy数组并处理（此处为占位示例，随机生成10个点）"""
-        # 实际代码应使用 sensor_msgs.point_cloud2 模块读取点云
-        points = np.random.rand(10, 3)  # 示例数据
-        return points
-
-    def generate_markers(self, points):
-        """为每个障碍物点生成一个球体标记"""
+    def _build_markers(self, points, header) -> MarkerArray:
+        """为每个有效障碍物点生成球体 Marker"""
         markers = MarkerArray()
-        from visualization_msgs.msg import Marker  # 局部导入避免依赖
-        for i, point in enumerate(points):
+        for i, (x, y) in enumerate(points):
             marker = Marker()
+            marker.header = header
+            marker.ns = 'obstacles'
             marker.id = i
             marker.type = Marker.SPHERE
-            marker.pose.position.x = point[0]
-            marker.pose.position.y = point[1]
-            marker.pose.position.z = point[2]
+            marker.action = Marker.ADD
+            marker.pose.position.x = x
+            marker.pose.position.y = y
+            marker.pose.position.z = 0.0
+            marker.pose.orientation.w = 1.0
             marker.scale.x = 0.2
             marker.scale.y = 0.2
             marker.scale.z = 0.2

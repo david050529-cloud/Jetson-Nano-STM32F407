@@ -148,6 +148,42 @@ Bringup --> ControlNode
 
 ```
 
+## 数据流
+
+```mermaid
+flowchart LR
+    subgraph Sensors
+        A["/scan (LaserScan)"]
+        B["/camera/image_raw"]
+        C["/imu/data_raw"]
+        D["/gps/fix"]
+    end
+
+    subgraph Perception
+        A --> obstacle_detector --> E["/perception/obstacles_markers"]
+        B --> road_detector --> F["/perception/road_type"]
+    end
+
+    subgraph Localization
+        C --> navsat_transform
+        D --> navsat_transform
+        navsat_transform --> G["/odometry/gps"]
+        C --> EKF
+        G --> EKF
+        EKF --> H["/localization/odometry"]
+        EKF --> I["odom → base_link TF"]
+    end
+
+    subgraph Planning
+        J["/planning/goal"] --> global_planner --> K["/planning/global_path"]
+        K --> local_planner --> L["motor_commands (MotorCommand)"]
+    end
+
+    subgraph Actuation
+        L --> stm32_serial_bridge --> serial --> M["STM32F407"]
+    end
+```
+
 ---
 
 生成日期：2026年4月5日

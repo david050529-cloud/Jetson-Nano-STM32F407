@@ -5,7 +5,7 @@ from geometry_msgs.msg import Twist
 from nav_msgs.msg import Path, Odometry
 from visualization_msgs.msg import MarkerArray
 from std_msgs.msg import String
-from stm32_serial_bridge.msg import MotorServoCmd   # 自定义电机舵机指令消息
+from stm32_serial_bridge.msg import MotorCommand   # 自定义电机舵机指令消息
 import numpy as np
 import math
 
@@ -22,7 +22,7 @@ class SimpleDWAPlanner(Node):
         # 订阅道路类型（铺装/非铺装）
         self.sub_road_type = self.create_subscription(String, '/perception/road_type', self.road_callback, 10)
         # 发布电机舵机指令
-        self.pub_cmd = self.create_publisher(MotorServoCmd, '/motor_servo_cmd', 10)
+        self.pub_cmd = self.create_publisher(MotorCommand, 'motor_commands', 10)
         # 定时控制循环（10Hz）
         self.timer = self.create_timer(0.1, self.control_loop)
 
@@ -93,8 +93,8 @@ class SimpleDWAPlanner(Node):
         # 角速度限制在[-0.5, 0.5] rad/s，并乘比例系数
         angular = max(-0.5, min(0.5, angle_diff * 1.5))
 
-        # 构造 MotorServoCmd 消息
-        cmd = MotorServoCmd()
+        # 构造 MotorCommand 消息
+        cmd = MotorCommand()
         cmd.motor1_target_rps = linear   # 假设线速度映射到电机1目标转速（转/秒）
         cmd.motor2_target_rps = linear   # 映射到电机2
         cmd.servo_angle = int(angular * 180 / math.pi)  # 角速度转舵机角度（度），具体映射需根据硬件调整

@@ -3,22 +3,30 @@ ekf_filter_node:
     frequency: 30.0
     sensor_timeout: 0.1
     two_d_mode: true
+    publish_tf: true          # 发布 odom→base_link TF（必须开启，供规划层使用）
     odom_frame: odom
     base_link_frame: base_link
     world_frame: odom
-    transform_time_offset: 0.0
-    odom0: /imu/data_raw
-    odom0_config: [false, false, false,
-                   true, true, true,
+
+    # IMU：提供姿态角（roll/pitch/yaw）
+    # 注意：应使用 imu0 而非 odom0，robot_localization 通过前缀区分传感器类型
+    imu0: /imu/data_raw
+    imu0_config: [false, false, false,   # 不融合 IMU 绝对位置（IMU 无位置信息）
+                  true,  true,  true,    # 融合 roll/pitch/yaw 姿态角
+                  false, false, false,   # 不融合线速度（无轮速计）
+                  true,  true,  true,    # 融合角速度
+                  false, false, false]   # 不融合线加速度（避免积分漂移）
+    imu0_remove_gravitational_acceleration: true
+
+    # GPS 需先经过 navsat_transform_node 转换为局部坐标系 Odometry，再送入 EKF
+    # 请在 localization.launch.py 中同步启动 navsat_transform_node，
+    # 将 /gps/fix + /imu/data_raw → /odometry/gps，然后 EKF 订阅 /odometry/gps
+    odom0: /odometry/gps
+    odom0_config: [true,  true,  false,  # 融合 GPS x/y 位置（局部坐标系）
+                   false, false, false,
                    false, false, false,
                    false, false, false,
                    false, false, false]
-    odom1: /gps/fix
-    odom1_config: [true, true, false,
-                   false, false, false,
-                   false, false, false,
-                   false, false, false,
-                   true, true, false]
+
     use_control: false
-    use_odometry: false
     debug: false

@@ -10,6 +10,11 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        # 将 config 目录下的模型文件安装到 share/vehicle_perception/config/
+        ('share/' + package_name + '/config', [
+            'config/road_seg_model.pt',
+            'config/sign_yolo_model.pt',
+        ]),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

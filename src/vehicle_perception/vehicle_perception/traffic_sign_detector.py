@@ -1,18 +1,23 @@
 # traffic_sign_detector.py
+import os
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
 from cv_bridge import CvBridge
 from ultralytics import YOLO
+from ament_index_python.packages import get_package_share_directory
 
 class TrafficSignDetector(Node):
     """交通标志检测节点：使用YOLO检测交通标识，发布检测结果数组"""
     def __init__(self):
         super().__init__('traffic_sign_detector')
         self.bridge = CvBridge()
-        # 加载训练好的交通标志检测模型
-        self.model = YOLO('config/sign_yolo_model.pt')
+        # 使用 ament_index 获取模型文件的绝对路径（安装后位于 share/vehicle_perception/config/）
+        pkg_share = get_package_share_directory('vehicle_perception')
+        model_path = os.path.join(pkg_share, 'config', 'sign_yolo_model.pt')
+        self.get_logger().info(f'加载交通标志检测模型: {model_path}')
+        self.model = YOLO(model_path)
         # 发布检测结果
         self.pub = self.create_publisher(Detection2DArray, '/perception/traffic_signs', 10)
         # 订阅图像

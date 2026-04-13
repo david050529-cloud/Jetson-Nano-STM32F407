@@ -8,44 +8,40 @@
 #include <vector>
 #include <cmath>
 
-// 定义一个GPS发布节点类，继承自rclcpp::Node
 class GpsPublisherNode : public rclcpp::Node
 {
 public:
-  // 构造函数，初始化节点名称为"gps_publisher_node"
   GpsPublisherNode() : Node("gps_publisher_node")
   {
-    // 声明参数：串口端口和波特率
+    // 声明参数
     this->declare_parameter<std::string>("port", "/dev/ttyCH341USB0");
     this->declare_parameter<int>("baudrate", 9600);
 
-    // 获取参数值
     std::string port = this->get_parameter("port").as_string();
     int baud = this->get_parameter("baudrate").as_int();
 
-    // 尝试打开串口
+    // 打开串口
     try
     {
-      serial_.setPort(port);                                         // 设置串口端口
-      serial_.setBaudrate(baud);                                     // 设置波特率
-      serial::Timeout timeout = serial::Timeout::simpleTimeout(100); // 设置超时时间
+      serial_.setPort(port);
+      serial_.setBaudrate(baud);
+      serial::Timeout timeout = serial::Timeout::simpleTimeout(100);
       serial_.setTimeout(timeout);
-      serial_.open(); // 打开串口
-      RCLCPP_INFO(this->get_logger(), "GPS serial port %s opened", port.c_str());
+      serial_.open();
+      RCLCPP_INFO(this->get_logger(), "GPS serial port %s opened at %d baud", port.c_str(), baud);
     }
     catch (const std::exception &e)
     {
-      // 如果打开串口失败，记录错误日志并关闭节点
       RCLCPP_ERROR(this->get_logger(), "Failed to open GPS port: %s", e.what());
       rclcpp::shutdown();
       return;
     }
 
-    // 创建GPS数据的发布器
+    // 创建发布者
     fix_pub_ = this->create_publisher<sensor_msgs::msg::NavSatFix>("/gps/fix", 10);
     status_pub_ = this->create_publisher<sensor_msgs::msg::NavSatStatus>("/gps/status", 10);
 
-    // 创建定时器，用于定期发布数据
+    // 定时器：每 50ms 读取一次串口
     timer_ = this->create_wall_timer(
         std::chrono::milliseconds(50),
         std::bind(&GpsPublisherNode::readAndPublish, this));
@@ -67,6 +63,7 @@ private:
       RCLCPP_WARN(this->get_logger(), "GPS read error: %s", e.what());
       return;
     }
+
     if (line.empty())
       return;
 
@@ -76,16 +73,20 @@ private:
     if (line.empty())
       return;
 
-    // 只解析 $GPGGA 语句
-    if (line.find("$GPGGA") == 0)
+    // 调试：打印原始 NMEA 语句（可选，正式运行可改为 RCLCPP_DEBUG）
+    // RCLCPP_INFO(this->get_logger(), "NMEA: %s", line.c_str());
+
+    // 匹配任何包含 "GGA" 的语句（支持 $GPGGA, $GNGGA, $BDGGA 等）
+    if (line.find("GGA") != std::string::npos)
     {
-      parseGPGGA(line);
+      parseGGA(line);
     }
   }
 
-  void parseGPGGA(const std::string &nmea)
+  void parseGGA(const std::string &nmea)
   {
-    // 示例: $GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47
+    // 示例: $GNGGA,130103.000,,,,,0,00,25.5,,,,,,*7A
+    // 有效示例: $GNGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47
     std::vector<std::string> fields;
     std::stringstream ss(nmea);
     std::string field;
@@ -93,63 +94,88 @@ private:
     {
       fields.push_back(field);
     }
-    if (fields.size() < 10)
-      return;
 
-    // 时间戳（可选）
-    // 纬度: fields[2] 格式 ddmm.mmmm, 方向 fields[3]
-    // 经度: fields[4] 格式 dddmm.mmmm, 方向 fields[5]
-    // 质量: fields[6]
-    // 卫星数: fields[7]
-    // 海拔: fields[9]
+    if (fields.size() < 10)
+    {
+      RCLCPP_WARN(this->get_logger(), "GGA line has insufficient fields: %zu", fields.size());
+      return;
+    }
+
+    // 时间戳 (fields[1]) 可忽略
+    // 纬度字段索引 2, 方向索引 3
+    // 经度字段索引 4, 方向索引 5
+    // 质量字段索引 6
+    // 卫星数索引 7
+    // 海拔字段索引 9
 
     double lat = 0.0, lon = 0.0, alt = 0.0;
-    int fix_quality = (fields.size() > 6) ? std::stoi(fields[6]) : 0;
+    int fix_quality = 0;
+
+    // 解析质量
+    if (fields.size() > 6 && !fields[6].empty())
+    {
+      fix_quality = std::stoi(fields[6]);
+    }
 
     // 解析纬度
     if (fields.size() > 3 && !fields[2].empty() && !fields[3].empty())
     {
       lat = convertNmeaCoordinate(fields[2], fields[3][0]);
     }
+
     // 解析经度
     if (fields.size() > 5 && !fields[4].empty() && !fields[5].empty())
     {
       lon = convertNmeaCoordinate(fields[4], fields[5][0]);
     }
+
     // 解析海拔
     if (fields.size() > 9 && !fields[9].empty())
     {
       alt = std::stod(fields[9]);
     }
 
+    // 创建 NavSatFix 消息
     auto fix_msg = sensor_msgs::msg::NavSatFix();
     fix_msg.header.stamp = this->now();
     fix_msg.header.frame_id = "gps";
     fix_msg.latitude = lat;
     fix_msg.longitude = lon;
     fix_msg.altitude = alt;
-    fix_msg.status.status = (fix_quality > 0) ? sensor_msgs::msg::NavSatStatus::STATUS_FIX : sensor_msgs::msg::NavSatStatus::STATUS_NO_FIX;
+
+    // 状态设置
+    fix_msg.status.status = (fix_quality > 0) ? 
+        sensor_msgs::msg::NavSatStatus::STATUS_FIX : 
+        sensor_msgs::msg::NavSatStatus::STATUS_NO_FIX;
     fix_msg.status.service = sensor_msgs::msg::NavSatStatus::SERVICE_GPS;
-    // 协方差（简化）
+
+    // 简单协方差（近似）
     fix_msg.position_covariance[0] = 1.0;
     fix_msg.position_covariance[4] = 1.0;
     fix_msg.position_covariance[8] = 1.0;
     fix_msg.position_covariance_type = sensor_msgs::msg::NavSatFix::COVARIANCE_TYPE_APPROXIMATED;
 
     fix_pub_->publish(fix_msg);
-    RCLCPP_DEBUG(this->get_logger(), "Published GPS fix: lat=%.6f, lon=%.6f, alt=%.1f", lat, lon, alt);
+    RCLCPP_INFO(this->get_logger(), "Published GPS fix: lat=%.6f, lon=%.6f, alt=%.1f, fix_quality=%d",
+                lat, lon, alt, fix_quality);
   }
 
   double convertNmeaCoordinate(const std::string &coord, char dir)
   {
-    // coord 格式: ddmm.mmmm
-    if (coord.length() < 4)
+    // 格式: ddmm.mmmm (纬度) 或 dddmm.mmmm (经度)
+    if (coord.empty())
       return 0.0;
-    double deg = std::stod(coord.substr(0, coord.find('.'))); // 整数部分可能包含度分
-    // 实际格式: 度数为前两位，分钟为剩余部分
-    int deg_int = static_cast<int>(deg / 100);
-    double minutes = deg - deg_int * 100;
-    double decimal = deg_int + minutes / 60.0;
+
+    size_t dotPos = coord.find('.');
+    if (dotPos == std::string::npos)
+      return 0.0;
+
+    // 分钟部分从小数点前两位开始
+    // 例如: 4807.038 -> 度=48, 分=07.038
+    double minutes = std::stod(coord.substr(dotPos - 2));
+    double degrees = std::stod(coord.substr(0, dotPos - 2));
+
+    double decimal = degrees + minutes / 60.0;
     if (dir == 'S' || dir == 'W')
       decimal = -decimal;
     return decimal;

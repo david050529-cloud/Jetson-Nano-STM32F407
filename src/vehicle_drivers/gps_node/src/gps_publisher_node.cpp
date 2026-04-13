@@ -16,7 +16,7 @@ public:
   GpsPublisherNode() : Node("gps_publisher_node")
   {
     // 声明参数：串口端口和波特率
-    this->declare_parameter<std::string>("port", "/dev/ttyUSB0");
+    this->declare_parameter<std::string>("port", "/dev/ttyCH341USB0");
     this->declare_parameter<int>("baudrate", 9600);
 
     // 获取参数值

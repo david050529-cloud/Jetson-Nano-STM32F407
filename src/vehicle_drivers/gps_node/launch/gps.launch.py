@@ -5,7 +5,7 @@ from launch.substitutions import LaunchConfiguration
 
 def generate_launch_description():
     return LaunchDescription([
-        DeclareLaunchArgument('port', default_value='/dev/ttyUSB0',
+        DeclareLaunchArgument('port', default_value='/dev/ttyCH341USB0',
                               description='GPS serial port'),
         DeclareLaunchArgument('baudrate', default_value='9600',
                               description='Baudrate'),

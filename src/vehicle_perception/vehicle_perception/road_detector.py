@@ -27,22 +27,49 @@ class RoadDetector(Node):
         # 订阅摄像头原始图像
         self.sub = self.create_subscription(Image, '/camera/image_raw', self.image_callback, 10)
 
+    # 模型类别ID定义（须与训练时 data.yaml 中的 names 顺序一致）
+    CLASS_PAVED   = 0   # 铺装路面
+    CLASS_UNPAVED = 1   # 非铺装路面
+
     def image_callback(self, msg):
-        """处理图像，进行分割并判断道路类型"""
+        """处理图像，按类别过滤掩膜并判断道路类型"""
         cv_image = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
-        results = self.model(cv_image, task='segment')  # 执行分割
-        road_type = 'unknown'   # 默认值
+        results = self.model(cv_image, task='segment')
+        road_type = 'unknown'
+        combined_mask = None
+
         if len(results) > 0 and results[0].masks is not None:
-            mask = results[0].masks.data[0].cpu().numpy()  # 获取第一个类别的掩膜（假设0类为铺装）
-            # 计算铺装路面像素占比
-            paved_ratio = np.sum(mask > 0.5) / mask.size
-            road_type = 'paved' if paved_ratio > 0.7 else 'unpaved'
-            # 发布道路类型
-            self.pub_road_type.publish(String(data=road_type))
-            # 将掩膜转换为图像消息并发布
-            mask_img = (mask * 255).astype(np.uint8)
+            h, w = cv_image.shape[:2]
+            paved_mask   = np.zeros((h, w), dtype=np.float32)
+            unpaved_mask = np.zeros((h, w), dtype=np.float32)
+
+            for i, cls_tensor in enumerate(results[0].boxes.cls):
+                cls_id = int(cls_tensor.item())
+                # masks.data 形状为 (N, mask_h, mask_w)，需要 resize 回原图尺寸
+                raw_mask = results[0].masks.data[i].cpu().numpy()
+                resized  = cv2.resize(raw_mask, (w, h), interpolation=cv2.INTER_LINEAR)
+                if cls_id == self.CLASS_PAVED:
+                    paved_mask   = np.maximum(paved_mask,   resized)
+                elif cls_id == self.CLASS_UNPAVED:
+                    unpaved_mask = np.maximum(unpaved_mask, resized)
+
+            paved_pixels   = np.sum(paved_mask   > 0.5)
+            unpaved_pixels = np.sum(unpaved_mask > 0.5)
+            total_pixels   = h * w
+
+            # 铺装面积占画面 30% 以上则判定为铺装路面
+            if paved_pixels / total_pixels > 0.3:
+                road_type    = 'paved'
+                combined_mask = paved_mask
+            elif unpaved_pixels / total_pixels > 0.3:
+                road_type    = 'unpaved'
+                combined_mask = unpaved_mask
+
+        self.pub_road_type.publish(String(data=road_type))
+        if combined_mask is not None:
+            mask_img = (combined_mask * 255).astype(np.uint8)
             self.pub_road_mask.publish(self.bridge.cv2_to_imgmsg(mask_img, 'mono8'))
-        self.get_logger().info(f'Road type: {road_type}')
+        self.get_logger().debug(f'Road type: {road_type}')
 
 def main(args=None):
     rclpy.init(args=args)

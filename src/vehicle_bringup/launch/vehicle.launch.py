@@ -63,10 +63,21 @@ def generate_launch_description():
         ),
 
         # ── 规划 ────────────────────────────────────────────────────
-        # global_planner：接收 /planning/goal，输出 /planning/global_path
-        Node(package='vehicle_planning', executable='global_planner', name='global_planner'),
+        # path_planner：加载比赛路点文件，发布 /planning/global_path，支持路网重规划
+        Node(
+            package='vehicle_planning',
+            executable='path_planner',
+            name='path_planner',
+            parameters=[{
+                'waypoint_file':     '/tmp/waypoint.txt',
+                'road_network_file': '',
+                'use_cartesian':     False,
+            }],
+        ),
         # local_planner：跟踪全局路径 + 避障，输出 motor_commands → stm32
         Node(package='vehicle_planning', executable='local_planner',  name='local_planner'),
+        # global_planner：接收 /planning/goal 目标点（调试用，比赛时注释掉）
+        # Node(package='vehicle_planning', executable='global_planner', name='global_planner'),
 
         # ── 底盘控制（serial bridge → STM32F407）──────────────────────
         Node(package='stm32_serial_bridge', executable='stm32_serial_bridge_node', name='stm32_bridge_node'),

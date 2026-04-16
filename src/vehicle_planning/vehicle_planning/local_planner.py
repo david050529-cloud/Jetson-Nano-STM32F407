@@ -173,6 +173,10 @@ class LocalPlanner(Node):
         # 超车/换道动作阶段索引（不同状态下含义不同）
         self.action_phase: int = 0
 
+        # 待执行属性缓冲：LANE_CHANGE/OVERTAKE 期间到达的路点属性暂存此处，
+        # 动作完成后回到 NORMAL 时立即触发
+        self.pending_attr: int = ATTR_UNKNOWN
+
         self.get_logger().info('局部规划控制节点已启动')
 
     # ══════════════════════════════════════════════════════════════════════
@@ -419,7 +423,13 @@ class LocalPlanner(Node):
           7（掉头）：切换 TURN_ACTION（大角度左转）
           8（泊车）：切换 PARK
         """
-        # 不在可打断的状态中则跳过
+        # LANE_CHANGE / OVERTAKE 动作执行期间不能中断，将属性缓存，动作完成后触发
+        if self.state in (DriveState.LANE_CHANGE, DriveState.OVERTAKE):
+            if attr not in (ATTR_STRAIGHT, ATTR_UNKNOWN):
+                self.pending_attr = attr
+            return
+
+        # 其余非可打断状态（PARK / EMERGENCY_STOP / FINISHED）也跳过
         if self.state not in (DriveState.NORMAL, DriveState.TURN_ACTION):
             return
 
@@ -663,6 +673,10 @@ class LocalPlanner(Node):
                 self.state       = DriveState.NORMAL
                 self.state_timer = 0.0
                 self.get_logger().info('换道完成，切回正常行驶')
+                # 消费换道期间缓存的属性行为
+                if self.pending_attr != ATTR_UNKNOWN:
+                    attr, self.pending_attr = self.pending_attr, ATTR_UNKNOWN
+                    self._trigger_waypoint_action(attr)
 
     def _handle_overtake(self, dt: float):
         """
@@ -728,29 +742,43 @@ class LocalPlanner(Node):
                 self.state       = DriveState.NORMAL
                 self.state_timer = 0.0
                 self.get_logger().info('超车完成，已归位原车道')
+                # 消费超车期间缓存的属性行为
+                if self.pending_attr != ATTR_UNKNOWN:
+                    attr, self.pending_attr = self.pending_attr, ATTR_UNKNOWN
+                    self._trigger_waypoint_action(attr)
 
     def _handle_park(self):
         """
         PARK 状态：低速接近当前目标路点并停车
 
-        到达路点（距离 < 0.5m）时停止并切换至 FINISHED
+        到达路点（距离 < 0.5m）时：
+          - 若这是路径的最后一个路点 → 切换至 FINISHED
+          - 否则停车 2 秒后切回 NORMAL，继续跟踪后续路点
         """
-        if self.current_wp_idx < len(self.global_path):
-            wx, wy, _ = self.global_path[self.current_wp_idx]
-            dist = self._dist_to_wp(self.current_wp_idx)
-
-            if dist < 0.5:
-                # 到达泊车位
-                self._publish_stop()
-                self.state = DriveState.FINISHED
-                self.get_logger().info('泊车完成，任务结束')
-            else:
-                # 低速向泊车位靠近，精确转向
-                steering = self._compute_steering(wx, wy)
-                self._publish_cmd(self.SPEED_PARK, steering)
-        else:
+        if self.current_wp_idx >= len(self.global_path):
             self._publish_stop()
             self.state = DriveState.FINISHED
+            return
+
+        wx, wy, _ = self.global_path[self.current_wp_idx]
+        dist = self._dist_to_wp(self.current_wp_idx)
+
+        if dist < 0.5:
+            self._publish_stop()
+            is_last_wp = (self.current_wp_idx >= len(self.global_path) - 1)
+            if is_last_wp:
+                self.state = DriveState.FINISHED
+                self.get_logger().info('泊车完成，已到达终点')
+            else:
+                # 非末尾路点：停车等待后继续（state_timer 由主循环累加）
+                if self.state_timer >= 2.0:
+                    self.state       = DriveState.NORMAL
+                    self.state_timer = 0.0
+                    self.get_logger().info('泊车完成，继续行驶后续路点')
+        else:
+            # 低速向泊车位靠近，精确转向
+            steering = self._compute_steering(wx, wy)
+            self._publish_cmd(self.SPEED_PARK, steering)
 
     # ══════════════════════════════════════════════════════════════════════
     # 指令发布

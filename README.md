@@ -138,3 +138,15 @@ ${workspaceFolder}/**\
   - `ros2 run vehicle_planning local_planner`，运行局部路径规划节点。
   - `ros2 topic echo /planning/global_path`，查看全局路径数据。
   - `ros2 topic pub /goal_pose geometry_msgs/PoseStamped "{header: {frame_id: 'map'}, pose: {position: {x: 10.0, y: 0.0}}}"`，发布一个新的目标位置。
+
+imu_device_udev_rules.rules
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", MODE:="0777", SYMLINK+="IMU"
+
+lidar_device_udev_rules.rules
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", MODE:="0777", SYMLINK+="Lidar"
+
+gps_device_udev_rules.rules
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", MODE:="0777", SYMLINK+="GPS"
+
+stm32_device_udev_rules.rules
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d4", MODE:="0777", SYMLINK+="STM32"

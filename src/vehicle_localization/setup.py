@@ -9,10 +9,13 @@ setup(
     version='0.0.0',  # 包的版本号
     packages=find_packages(exclude=['test']),  # 自动查找子包，排除测试目录
     data_files=[
-        # 安装资源文件
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        ('share/' + package_name + '/launch',
+            ['launch/localization.launch.py']),
+        ('share/' + package_name + '/config',
+            ['config/ekf.yaml']),
     ],
     install_requires=['setuptools'],  # 安装依赖
     zip_safe=True,  # 指定包是否可以安全地作为zip文件安装
@@ -27,7 +30,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            # 定义可执行脚本
+            'telemetry_to_odom = vehicle_localization.telemetry_to_odom_node:main',
         ],
     },
 )

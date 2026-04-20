@@ -20,4 +20,5 @@
   <depend>geometry_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>robot_localization</depend>
+  <depend>stm32_serial_bridge</depend>
 </package>

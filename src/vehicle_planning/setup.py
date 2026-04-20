@@ -12,6 +12,10 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch',
             ['launch/path_planning.launch.py']),
+        ('share/' + package_name + '/config',
+            ['config/nav2_params.yaml']),
+        ('share/' + package_name + '/behavior_trees',
+            ['behavior_trees/vehicle_mission_bt.xml']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -24,12 +28,12 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            # 比赛路点路径规划节点：加载 waypoint.txt，发布竞赛路径，支持路网重规划
-            'path_planner  = vehicle_planning.path_planner:main',
-            # 目标点路径规划节点：接收任意目标点，生成直线路径（用于测试/辅助）
-            'global_planner = vehicle_planning.global_planner:main',
-            # 局部规划控制节点：路径跟踪、属性行为、交通标志响应、障碍物避障
-            'local_planner  = vehicle_planning.local_planner:main',
+            'path_planner        = vehicle_planning.path_planner:main',
+            'global_planner      = vehicle_planning.global_planner:main',
+            'local_planner       = vehicle_planning.local_planner:main',
+            # Nav2 集成层
+            'cmd_vel_to_motor    = vehicle_planning.cmd_vel_to_motor_node:main',
+            'nav2_mission_executor = vehicle_planning.nav2_mission_executor:main',
         ],
     },
 )

@@ -3,30 +3,67 @@ ekf_filter_node:
     frequency: 30.0
     sensor_timeout: 0.1
     two_d_mode: true
-    publish_tf: true          # 发布 odom→base_link TF（必须开启，供规划层使用）
+    publish_tf: true          # 发布 odom→base_link TF（供规划层使用）
     odom_frame: odom
     base_link_frame: base_link
     world_frame: odom
+    print_diagnostics: true
+    debug: false
 
-    # IMU：提供姿态角（roll/pitch/yaw）
-    # 注意：应使用 imu0 而非 odom0，robot_localization 通过前缀区分传感器类型
+    # ── 数据源 1：IMU（姿态角 + 角速度）────────────────────────────────
+    # 来自 imu_publisher_node，包含 roll/pitch/yaw + 3轴角速度
     imu0: /imu/data_raw
-    imu0_config: [false, false, false,   # 不融合 IMU 绝对位置（IMU 无位置信息）
+    imu0_config: [false, false, false,   # 不融合位置（IMU 无绝对位置）
                   true,  true,  true,    # 融合 roll/pitch/yaw 姿态角
-                  false, false, false,   # 不融合线速度（无轮速计）
-                  true,  true,  true,    # 融合角速度
-                  false, false, false]   # 不融合线加速度（避免积分漂移）
+                  false, false, false,   # 不融合线速度
+                  true,  true,  true,    # 融合角速度（提升偏航精度）
+                  false, false, false]   # 不融合线加速度（积分漂移太大）
+    imu0_differential: false
+    imu0_relative: false
+    imu0_queue_size: 5
     imu0_remove_gravitational_acceleration: true
 
-    # GPS 需先经过 navsat_transform_node 转换为局部坐标系 Odometry，再送入 EKF
-    # 请在 localization.launch.py 中同步启动 navsat_transform_node，
-    # 将 /gps/fix + /imu/data_raw → /odometry/gps，然后 EKF 订阅 /odometry/gps
+    # ── 数据源 2：GPS 绝对位置（经 navsat_transform 转换为局部坐标）────
+    # navsat_transform_node 将 /gps/fix → /odometry/gps（ENU 局部坐标）
     odom0: /odometry/gps
-    odom0_config: [true,  true,  false,  # 融合 GPS x/y 位置（局部坐标系）
+    odom0_config: [true,  true,  false,  # 融合 x/y 绝对位置（GPS 纠偏）
                    false, false, false,
                    false, false, false,
                    false, false, false,
                    false, false, false]
+    odom0_differential: false
+    odom0_relative: false
+    odom0_queue_size: 5
+
+    # ── 数据源 3：STM32 轮速里程计（线速度 vx）──────────────────────────
+    # telemetry_to_odom_node 将电机实际 RPS → /odometry/wheel
+    # 仅融合 vx，提升速度估计平滑性（GPS 更新延迟时保持连续性）
+    odom1: /odometry/wheel
+    odom1_config: [false, false, false,  # 不融合积分位置（漂移大）
+                   false, false, false,
+                   true,  false, false,  # 仅融合 vx（线速度）
+                   false, false, false,
+                   false, false, false]
+    odom1_differential: false
+    odom1_relative: false
+    odom1_queue_size: 5
 
     use_control: false
     debug: false
+
+    # 过程噪声协方差矩阵（15×15，对角线顺序：x,y,z,r,p,yaw,vx,vy,vz,vr,vp,vyaw,ax,ay,az）
+    process_noise_covariance: [0.05,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,    0.0,    0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+                               0.0,   0.05,  0.0,   0.0,   0.0,   0.0,   0.0,    0.0,    0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+                               0.0,   0.0,   0.06,  0.0,   0.0,   0.0,   0.0,    0.0,    0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+                               0.0,   0.0,   0.0,   0.03,  0.0,   0.0,   0.0,    0.0,    0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+                               0.0,   0.0,   0.0,   0.0,   0.03,  0.0,   0.0,    0.0,    0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+                               0.0,   0.0,   0.0,   0.0,   0.0,   0.06,  0.0,    0.0,    0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+                               0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.025,  0.0,    0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+                               0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,    0.025,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+                               0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,    0.0,    0.04,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+                               0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,    0.0,    0.0,   0.01,  0.0,   0.0,   0.0,   0.0,   0.0,
+                               0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,    0.0,    0.0,   0.0,   0.01,  0.0,   0.0,   0.0,   0.0,
+                               0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,    0.0,    0.0,   0.0,   0.0,   0.02,  0.0,   0.0,   0.0,
+                               0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,    0.0,    0.0,   0.0,   0.0,   0.0,   0.01,  0.0,   0.0,
+                               0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,    0.0,    0.0,   0.0,   0.0,   0.0,   0.0,   0.01,  0.0,
+                               0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,    0.0,    0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.015]

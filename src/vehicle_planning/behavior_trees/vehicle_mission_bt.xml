@@ -1,0 +1,73 @@
+<!--
+  车辆竞赛导航行为树 (Nav2 BTCPP_format="4")
+  适用：NavigateThroughPoses 动作服务器
+
+  流程：
+    1. 以 1Hz 重规划全局路径（RateController）
+    2. 跟踪路径（FollowPath）
+    3. 若规划或跟踪失败：清代价地图 → 后退 → 等待（轮询恢复）
+-->
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="6" name="NavigateRecovery">
+
+      <!-- ── 主导航管线 ─────────────────────────────────────────── -->
+      <PipelineSequence name="NavigateWithReplanning">
+
+        <!-- 全局路径重规划（1Hz，路径失效或目标更新时触发） -->
+        <RateController hz="1.0">
+          <RecoveryNode number_of_retries="1" name="ComputePathRecovery">
+            <ReactiveSequence name="ComputePathSeq">
+              <PathExpirationChecker number_of_poses="10"/>
+              <ComputePathThroughPoses
+                goals="{goals}"
+                path="{path}"
+                planner_id="GridBased"/>
+            </ReactiveSequence>
+            <!-- 规划失败：清全局代价地图后重试 -->
+            <ReactiveFallback name="ComputePathFallback">
+              <GoalUpdated/>
+              <ClearEntireCostmap
+                name="ClearGlobalCostmap"
+                service_name="global_costmap/clear_entirely_global_costmap"/>
+            </ReactiveFallback>
+          </RecoveryNode>
+        </RateController>
+
+        <!-- 路径跟踪（Controller Server 执行） -->
+        <RecoveryNode number_of_retries="1" name="FollowPathRecovery">
+          <FollowPath path="{path}" controller_id="FollowPath"/>
+          <!-- 跟踪失败：清局部代价地图后重试 -->
+          <ReactiveFallback name="FollowPathFallback">
+            <GoalUpdated/>
+            <ClearEntireCostmap
+              name="ClearLocalCostmap"
+              service_name="local_costmap/clear_entirely_local_costmap"/>
+          </ReactiveFallback>
+        </RecoveryNode>
+
+      </PipelineSequence>
+
+      <!-- ── 全局恢复行为（代价地图清除 → 后退 → 等待） ────────── -->
+      <ReactiveFallback name="RecoveryFallback">
+        <GoalUpdated/>
+        <RoundRobin name="RecoveryActions">
+          <!-- 第1轮：清空双层代价地图 -->
+          <Sequence name="ClearCostmaps">
+            <ClearEntireCostmap
+              name="ClearLocal-Recovery"
+              service_name="local_costmap/clear_entirely_local_costmap"/>
+            <ClearEntireCostmap
+              name="ClearGlobal-Recovery"
+              service_name="global_costmap/clear_entirely_global_costmap"/>
+          </Sequence>
+          <!-- 第2轮：原地后退（Ackermann 低速倒车） -->
+          <BackUp backup_dist="0.20" backup_speed="0.05"/>
+          <!-- 第3轮：原地等待 3 秒 -->
+          <Wait wait_duration="3.0"/>
+        </RoundRobin>
+      </ReactiveFallback>
+
+    </RecoveryNode>
+  </BehaviorTree>
+</root>

@@ -139,6 +139,12 @@ ${workspaceFolder}/**\
   - `ros2 topic echo /planning/global_path`，查看全局路径数据。
   - `ros2 topic pub /goal_pose geometry_msgs/PoseStamped "{header: {frame_id: 'map'}, pose: {position: {x: 10.0, y: 0.0}}}"`，发布一个新的目标位置。
 
+## 启动（Nav2 模式）
+
+`ros2 launch vehicle_bringup vehicle_nav2.launch.py  waypoint_file:=/tmp/waypoint.txt`
+
+注意：wheel_radius、wheelbase、max_steering_deg 需根据实车标定后 在 launch 文件中调整。
+
 ## 添加规则对USB设备进行命名
 
 `imu_device_udev_rules.rules`

@@ -28,7 +28,7 @@ public:
                 drivers::serial_driver::StopBits::ONE);
 
             // 创建串口对象（需要提供IO上下文、端口名和配置）
-            std::string port_name = "/dev/imu_usb";
+            std::string port_name = "/dev/IMU";
             serial_port_ = std::make_shared<drivers::serial_driver::SerialPort>(
                 *io_context_,
                 port_name,

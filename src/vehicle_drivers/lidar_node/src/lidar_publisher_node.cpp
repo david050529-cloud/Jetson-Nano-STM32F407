@@ -63,7 +63,7 @@ private:
         this->declare_parameter<int>("tcp_port", 20108);                     // TCP连接端口
         this->declare_parameter<std::string>("udp_ip", "192.168.11.2");      // UDP连接IP地址
         this->declare_parameter<int>("udp_port", 8089);                      // UDP连接端口
-        this->declare_parameter<std::string>("serial_port", "/dev/ttyUSB0"); // 串口设备路径
+        this->declare_parameter<std::string>("serial_port", "/dev/Lidar"); // 串口设备路径
         this->declare_parameter<int>("serial_baudrate", 1000000);            // 串口波特率
         this->declare_parameter<std::string>("frame_id", "laser_frame");     // 坐标系名称
         this->declare_parameter<bool>("inverted", false);                    // 是否反转数据方向

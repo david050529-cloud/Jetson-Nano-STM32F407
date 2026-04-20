@@ -45,7 +45,7 @@ public:
     Stm32SerialBridge() : Node("stm32_serial_bridge"), running_(true)
     {
         // 声明并获取串口参数
-        this->declare_parameter<std::string>("serial_port", "/dev/ttyACM0");
+        this->declare_parameter<std::string>("serial_port", "/dev/STM32");
         this->declare_parameter<int>("baud_rate", 115200);
         this->declare_parameter<int>("serial_timeout_ms", 100);
 

@@ -9,8 +9,7 @@ using namespace std::chrono_literals;
 class CameraNode : public rclcpp::Node
 {
 public:
-    CameraNode()
-        : Node("camera_node")
+    CameraNode() : Node("camera_node")
     {
         // 声明参数：摄像头设备号（默认0）
         this->declare_parameter("camera_id", 0);

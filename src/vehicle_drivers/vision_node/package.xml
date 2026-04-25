@@ -13,6 +13,7 @@
   <depend>cv_bridge</depend>
   <depend>std_msgs</depend>
   <depend>opencv</depend>
+  <depend>image_transport</depend>
 
   <!-- 不再需要 Python 依赖和 ultralytics -->
 

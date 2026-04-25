@@ -11,12 +11,23 @@ find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(image_transport REQUIRED)
 
 # 只保留 camera_node
 add_executable(camera_node src/camera_node.cpp)
-ament_target_dependencies(camera_node rclcpp sensor_msgs cv_bridge OpenCV)
+ament_target_dependencies(camera_node rclcpp sensor_msgs cv_bridge OpenCV image_transport)
 
-install(TARGETS camera_node
+# yolo_video_subscriber 使用 image_transport 订阅
+add_executable(yolo_video_subscriber src/yolo_video_subscriber.cpp)
+ament_target_dependencies(yolo_video_subscriber
+  rclcpp
+  sensor_msgs
+  cv_bridge
+  OpenCV
+  image_transport
+)
+
+install(TARGETS camera_node yolo_video_subscriber
   DESTINATION lib/${PROJECT_NAME})
 
 # 不再安装 yolo_node.py 和 yolo_video_subscriber

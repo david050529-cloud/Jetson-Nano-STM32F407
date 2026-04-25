@@ -10,8 +10,8 @@ def generate_launch_description():
     )
 
     transport_arg = DeclareLaunchArgument(
-        'image_transport', default_value='raw',
-        description='Image transport to use (e.g. raw, compressed, h264)'
+        'image_transport', default_value='h264',
+        description='Image transport plugin to use (e.g., raw, h264, ffmpeg)'
     )
 
     camera_node = Node(

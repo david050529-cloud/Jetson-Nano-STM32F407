@@ -3,15 +3,16 @@ from launch_ros.actions import Node
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 
+
 def generate_launch_description():
     camera_id_arg = DeclareLaunchArgument(
         'camera_id', default_value='0',
         description='Camera device ID'
     )
 
-    transport_arg = DeclareLaunchArgument(
-        'image_transport', default_value='h264',
-        description='Image transport plugin to use (e.g., raw, h264, ffmpeg)'
+    model_arg = DeclareLaunchArgument(
+        'model', default_value='yolov8n.pt',
+        description='YOLO model file path'
     )
 
     camera_node = Node(
@@ -21,15 +22,22 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'camera_id': LaunchConfiguration('camera_id'),
-        }],
-        remappings=[
-            # image_transport 会自动处理话题重映射，通常无需额外设置
-        ]
+        }]
     )
 
-    # 若想强制传输层使用 H.264，可在启动时加参数：image_transport:=h264
+    yolo_node = Node(
+        package='vision_package',
+        executable='yolo_node',
+        name='yolo_node',
+        output='screen',
+        parameters=[{
+            'model': LaunchConfiguration('model'),
+        }]
+    )
+
     return LaunchDescription([
         camera_id_arg,
-        transport_arg,
+        model_arg,
         camera_node,
+        yolo_node,
     ])

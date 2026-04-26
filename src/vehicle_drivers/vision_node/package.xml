@@ -3,24 +3,22 @@
 <package format="3">
   <name>vision_package</name>
   <version>0.0.0</version>
-  <description>Vision package with only camera driver (no detection)</description>
+  <description>Vision package with camera driver and YOLO detection</description>
   <maintainer email="19804188212@163.com">david0529</maintainer>
   <license>TODO: License declaration</license>
 
-  <!-- C++ 与 ROS 核心依赖 -->
-  <depend>rclcpp</depend>
+  <depend>rclpy</depend>
   <depend>sensor_msgs</depend>
   <depend>cv_bridge</depend>
   <depend>std_msgs</depend>
-  <depend>opencv</depend>
-  <depend>image_transport</depend>
+  <depend>python3-opencv</depend>
 
-  <!-- 不再需要 Python 依赖和 ultralytics -->
-
-  <test_depend>ament_lint_auto</test_depend>
-  <test_depend>ament_lint_common</test_depend>
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
 
   <export>
-    <build_type>ament_cmake</build_type>
+    <build_type>ament_python</build_type>
   </export>
 </package>

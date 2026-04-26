@@ -3,10 +3,8 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
-import cv2
 from ultralytics import YOLO
-import numpy as np
-from image_transport import Subscriber
+
 
 class YoloNode(Node):
     def __init__(self):
@@ -17,10 +15,8 @@ class YoloNode(Node):
         self.model = YOLO(model_path)
         self.bridge = CvBridge()
 
-        # 使用 image_transport 订阅，自动解压缩
-        self.subscription = Subscriber(self, Image, '/camera/image_raw', self.image_callback)
-
-        # 发布检测结果（仍用普通 Image 或 image_transport）
+        self.subscription = self.create_subscription(
+            Image, '/camera/image_raw', self.image_callback, 10)
         self.publisher = self.create_publisher(Image, '/camera/image_detected', 10)
 
     def image_callback(self, msg):
@@ -37,12 +33,14 @@ class YoloNode(Node):
         out_msg.header = msg.header
         self.publisher.publish(out_msg)
 
+
 def main(args=None):
     rclpy.init(args=args)
     node = YoloNode()
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()

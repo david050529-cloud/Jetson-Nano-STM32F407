@@ -30,7 +30,7 @@ private:
         try
         {
             // 将 ROS 图像消息转换为 OpenCV 图像
-            cv::Mat frame = cv_bridge::toCvShare(msg, "bgr8")->image;
+            cv::Mat frame = cv_bridge::toCvShare(msg, "jpeg")->image;
 
             // 预处理图像以适配 YOLO 输入
             cv::Mat blob = cv::dnn::blobFromImage(frame, 1.0 / 255.0, cv::Size(640, 640), cv::Scalar(), true, false);

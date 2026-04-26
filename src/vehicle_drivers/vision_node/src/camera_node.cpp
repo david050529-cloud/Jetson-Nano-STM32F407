@@ -42,7 +42,7 @@ private:
         }
 
         // 使用cv_bridge将OpenCV图像转换为ROS图像消息
-        auto msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", frame).toImageMsg();
+        auto msg = cv_bridge::CvImage(std_msgs::msg::Header(), "jpeg", frame).toImageMsg();
         msg->header.stamp = this->now();
         publisher_->publish(*msg);
     }

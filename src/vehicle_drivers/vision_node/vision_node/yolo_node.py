@@ -29,7 +29,7 @@ class YoloNode(Node):
     def image_callback(self, msg):
         try:
             # 将ROS图像转换为OpenCV图像
-            cv_image = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
+            cv_image = self.bridge.imgmsg_to_cv2(msg, 'jpeg')
         except Exception as e:
             self.get_logger().error(f'cv_bridge conversion error: {e}')
             return
@@ -41,7 +41,7 @@ class YoloNode(Node):
         annotated_frame = results[0].plot()  # 返回带框的BGR图像
 
         # 将OpenCV图像转换为ROS图像并发布
-        out_msg = self.bridge.cv2_to_imgmsg(annotated_frame, 'bgr8')
+        out_msg = self.bridge.cv2_to_imgmsg(annotated_frame, 'jpeg')
         out_msg.header = msg.header  # 保持时间戳同步
         self.publisher.publish(out_msg)
 

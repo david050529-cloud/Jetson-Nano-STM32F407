@@ -17,10 +17,10 @@ class YoloNode(Node):
         self.model = YOLO(model_path)
         self.bridge = CvBridge()
 
-        # 使用 image_transport 订阅，自动解压缩
+        # 使用 image_transport 订阅（自动解压 H.264）
         self.subscription = Subscriber(self, Image, '/camera/image_raw', self.image_callback)
 
-        # 发布检测结果（仍用普通 Image 或 image_transport）
+        # 发布检测结果图像
         self.publisher = self.create_publisher(Image, '/camera/image_detected', 10)
 
     def image_callback(self, msg):

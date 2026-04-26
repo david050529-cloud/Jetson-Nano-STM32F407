@@ -13,10 +13,11 @@ public:
     {
         // 使用 image_transport 订阅，自动解压
         image_transport_ = std::make_shared<image_transport::ImageTransport>(shared_from_this());
-        sub_ = image_transport_->subscribe("/camera/image_raw", 10,
+        sub_ = image_transport_->subscribe(
+            "/camera/image_raw", 10,
             std::bind(&YoloVideoSubscriber::imageCallback, this, std::placeholders::_1));
 
-        // 加载 YOLO 模型（需确保模型文件路径正确）
+        // 加载 YOLO 模型（请确保模型文件放在工作目录或指定绝对路径）
         std::string model_path = "yolo11n.pt";
         net_ = cv::dnn::readNet(model_path);
         if (net_.empty()) {
@@ -28,10 +29,10 @@ private:
     void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr & msg)
     {
         try {
-            // image_transport 已自动解码，这里直接得到 bgr8 图像
+            // 解码后的图像已经是 bgr8
             cv::Mat frame = cv_bridge::toCvShare(msg, "bgr8")->image;
 
-            // 预处理并进行推理
+            // YOLO 推理
             cv::Mat blob = cv::dnn::blobFromImage(frame, 1.0/255.0, cv::Size(640,640), cv::Scalar(), true, false);
             net_.setInput(blob);
 
@@ -39,7 +40,7 @@ private:
             net_.forward(outputs, net_.getUnconnectedOutLayersNames());
 
             for (const auto & output : outputs) {
-                auto * data = (float *)output.data;
+                auto *data = (float *)output.data;
                 for (int i = 0; i < output.rows; ++i, data += output.cols) {
                     float confidence = data[4];
                     if (confidence > 0.5) {
@@ -64,7 +65,7 @@ private:
     cv::dnn::Net net_;
 };
 
-int main(int argc, char * argv[])
+int main(int argc, char *argv[])
 {
     rclcpp::init(argc, argv);
     rclcpp::spin(std::make_shared<YoloVideoSubscriber>());

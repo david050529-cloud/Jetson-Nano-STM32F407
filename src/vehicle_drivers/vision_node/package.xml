@@ -3,7 +3,7 @@
 <package format="3">
   <name>vision_package</name>
   <version>0.0.0</version>
-  <description>Vision package with H.264 transport support</description>
+  <description>Vision package with camera and YOLO detection (H.264 transport)</description>
   <maintainer email="19804188212@163.com">david0529</maintainer>
   <license>TODO: License declaration</license>
 

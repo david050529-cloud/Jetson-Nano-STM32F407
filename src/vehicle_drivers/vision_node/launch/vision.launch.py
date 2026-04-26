@@ -10,8 +10,8 @@ def generate_launch_description():
     )
 
     transport_arg = DeclareLaunchArgument(
-        'image_transport', default_value='h264',
-        description='Image transport plugin to use (e.g., raw, h264, ffmpeg)'
+        'image_transport', default_value='ffmpeg',   # 使用 ffmpeg 插件
+        description='Image transport plugin (raw, ffmpeg)'
     )
 
     camera_node = Node(
@@ -21,13 +21,15 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'camera_id': LaunchConfiguration('camera_id'),
-        }],
-        remappings=[
-            # image_transport 会自动处理话题重映射，通常无需额外设置
-        ]
+            'image_transport': LaunchConfiguration('image_transport'),
+            # ffmpeg_image_transport 特有参数
+            'ffmpeg_image_transport.encoding': 'libx264',
+            'ffmpeg_image_transport.bit_rate': 2000000,      # 2 Mbps
+            'ffmpeg_image_transport.preset': 'ultrafast',    # 适合实时
+            'ffmpeg_image_transport.profile': 'baseline',
+        }]
     )
 
-    # 若想强制传输层使用 H.264，可在启动时加参数：image_transport:=h264
     return LaunchDescription([
         camera_id_arg,
         transport_arg,

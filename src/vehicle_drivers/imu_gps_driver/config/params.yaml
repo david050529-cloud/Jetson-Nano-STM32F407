@@ -1,5 +1,0 @@
-imu_gps_fusion_node:
-  ros__parameters:
-    publish_tf: false
-    odom_frame: "odom"
-    base_frame: "base_link"

@@ -18,7 +18,10 @@ setup(
     maintainer_email='19804188212@163.com',
     description='Vision package with camera driver and YOLO detection',
     license='TODO: License declaration',
-    tests_require=['pytest'],
+    # tests_require=['pytest'],
+    extras_require = {
+        'test': ['pytest'],
+    },
     entry_points={
         'console_scripts': [
             'camera_node = vision_package.camera_node:main',

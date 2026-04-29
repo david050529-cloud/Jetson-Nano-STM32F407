@@ -16,7 +16,7 @@ public:
     IMUGPSParser() : Node("imu_gps_parser_node")
     {
         // 声明参数
-        this->declare_parameter<std::string>("serial_port", "/dev/ttyUSB0");
+        this->declare_parameter<std::string>("serial_port", "/dev/IMU");
         this->declare_parameter<int>("baudrate", 9600);
         std::string port = this->get_parameter("serial_port").as_string();
         int baud = this->get_parameter("baudrate").as_int();

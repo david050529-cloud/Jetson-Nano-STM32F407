@@ -9,7 +9,7 @@ def generate_launch_description():
             name='imu_gps_parser_node',
             output='screen',
             parameters=[{
-                'serial_port': '/dev/ttyUSB0',   # 请修改为实际串口设备
+                'serial_port': '/dev/IMU',   # 请修改为实际串口设备
                 'baudrate': 9600
             }]
         ),

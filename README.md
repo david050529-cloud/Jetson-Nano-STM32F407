@@ -150,3 +150,6 @@ SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", MODE:="0777
 
 stm32_device_udev_rules.rules
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d4", MODE:="0777", SYMLINK+="STM32"
+
+Unable to load plugin for transport 'image_transport/compressed_sub', error string:
+According to the loaded plugin descriptions the class image_transport/compressed_sub with base class type image_transport::SubscriberPlugin does not exist. Declared types are  image_transport/ffmpeg_sub image_transport/raw_sub

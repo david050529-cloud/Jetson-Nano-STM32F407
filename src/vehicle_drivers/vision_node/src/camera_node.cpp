@@ -41,10 +41,8 @@ CameraNode::CameraNode(const rclcpp::NodeOptions & options)
   // Buffer of 1 so cap_.read() always returns the newest frame
   cap_.set(cv::CAP_PROP_BUFFERSIZE,   1);
 
-  // BEST_EFFORT + KeepLast(1): drop stale frames instead of queuing them
-  auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
   pub_ = create_publisher<sensor_msgs::msg::CompressedImage>(
-    "/camera/image_raw/compressed", qos);
+    "/camera/image_raw/compressed", rclcpp::QoS(10));
 
   running_ = true;
   capture_thread_ = std::thread(&CameraNode::captureLoop, this);

@@ -5,39 +5,39 @@ from launch.substitutions import LaunchConfiguration
 
 
 def generate_launch_description():
-    camera_id_arg = DeclareLaunchArgument(
-        'camera_id', default_value='0',
-        description='Camera device ID'
-    )
-
-    model_arg = DeclareLaunchArgument(
-        'model', default_value='yolov8n.pt',
-        description='YOLO model file path'
-    )
-
-    camera_node = Node(
-        package='vision_package',
-        executable='camera_node',
-        name='camera_node',
-        output='screen',
-        parameters=[{
-            'camera_id': LaunchConfiguration('camera_id'),
-        }]
-    )
-
-    yolo_node = Node(
-        package='vision_package',
-        executable='yolo_node',
-        name='yolo_node',
-        output='screen',
-        parameters=[{
-            'model': LaunchConfiguration('model'),
-        }]
-    )
-
     return LaunchDescription([
-        camera_id_arg,
-        model_arg,
-        camera_node,
-        yolo_node,
+        DeclareLaunchArgument(
+            'camera_id', default_value='0',
+            description='Camera device index (e.g. 0 for /dev/video0)'
+        ),
+        DeclareLaunchArgument(
+            'width', default_value='640',
+            description='Frame width in pixels'
+        ),
+        DeclareLaunchArgument(
+            'height', default_value='480',
+            description='Frame height in pixels'
+        ),
+        DeclareLaunchArgument(
+            'fps', default_value='30',
+            description='Target frame rate'
+        ),
+        DeclareLaunchArgument(
+            'jpeg_quality', default_value='80',
+            description='JPEG compression quality (0-100)'
+        ),
+
+        Node(
+            package='vision_node',
+            executable='camera_node',
+            name='camera_node',
+            output='screen',
+            parameters=[{
+                'camera_id':    LaunchConfiguration('camera_id'),
+                'width':        LaunchConfiguration('width'),
+                'height':       LaunchConfiguration('height'),
+                'fps':          LaunchConfiguration('fps'),
+                'jpeg_quality': LaunchConfiguration('jpeg_quality'),
+            }],
+        ),
     ])

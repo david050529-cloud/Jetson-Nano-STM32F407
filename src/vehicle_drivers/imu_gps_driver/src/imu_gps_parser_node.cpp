@@ -22,7 +22,7 @@ public:
         int baud = this->get_parameter("baudrate").as_int();
 
         // 创建发布者
-        imu_pub_ = this->create_publisher<sensor_msgs::msg::Imu>("imu/data", 10);
+        imu_pub_ = this->create_publisher<sensor_msgs::msg::Imu>("imu/data_raw", 10);
         gps_pub_ = this->create_publisher<sensor_msgs::msg::NavSatFix>("gps/fix", 10);
 
         // 打开串口

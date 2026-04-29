@@ -8,7 +8,7 @@ public:
     IMUGPSSubscriber() : Node("imu_gps_subscriber_node")
     {
         imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
-            "imu/data", 10,
+            "imu/data_raw", 10,
             std::bind(&IMUGPSSubscriber::imu_callback, this, std::placeholders::_1));
         gps_sub_ = this->create_subscription<sensor_msgs::msg::NavSatFix>(
             "gps/fix", 10,

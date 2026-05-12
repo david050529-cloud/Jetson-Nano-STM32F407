@@ -30,10 +30,10 @@ setup(
     entry_points={
         'console_scripts': [
             'obstacle_detector = vehicle_perception.obstacle_detector:main',
-            # road_detector 现在基于 best.pt 同时输出斑马线与红/绿/黄交通灯，
-            # 已覆盖原 traffic_sign_detector 的交通灯职能；如需恢复独立的交通
-            # 标志检测器，需要先在 config/ 下提供对应的模型文件并重新注册。
+            # road_detector 基于 best.pt 检测斑马线与红/绿/黄交通灯
             'road_detector = vehicle_perception.road_detector:main',
+            # yolo_detector 通用 YOLO 目标检测 (COCO 80 类)，针对 Jetson CUDA/TensorRT 优化
+            'yolo_detector = vehicle_perception.yolo_detector:main',
         ],
     },
 )

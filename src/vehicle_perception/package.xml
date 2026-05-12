@@ -19,6 +19,7 @@
   <depend>rclpy</depend>
   <depend>sensor_msgs</depend>
   <depend>vision_msgs</depend>
+  <depend>cv_bridge</depend>
   <depend>numpy</depend>
   <depend>opencv-python</depend>
 </package>

@@ -21,4 +21,13 @@
   <depend>nav_msgs</depend>
   <depend>robot_localization</depend>
   <depend>vision_msgs</depend>
+
+  <exec_depend>vision_node</exec_depend>
+  <exec_depend>vehicle_localization</exec_depend>
+  <exec_depend>vehicle_perception</exec_depend>
+  <exec_depend>vehicle_planning</exec_depend>
+  <exec_depend>imu_gps_parser</exec_depend>
+  <exec_depend>lidar_node</exec_depend>
+  <exec_depend>stm32_serial_bridge</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
 </package>

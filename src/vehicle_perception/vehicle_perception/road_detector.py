@@ -13,11 +13,12 @@
 """
 import os
 
+import numpy as np
+import cv2
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CompressedImage
 from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
-from cv_bridge import CvBridge
 from ultralytics import YOLO
 from ament_index_python.packages import get_package_share_directory
 
@@ -27,7 +28,6 @@ class RoadDetector(Node):
 
     def __init__(self):
         super().__init__('road_detector')
-        self.bridge = CvBridge()
 
         # 检测置信度阈值，低于该值的框不发布
         self.declare_parameter('conf_threshold', 0.4)
@@ -45,13 +45,18 @@ class RoadDetector(Node):
         # 发布检测结果（斑马线 + 交通灯）
         self.pub = self.create_publisher(
             Detection2DArray, '/perception/road_signs', 10)
-        # 订阅摄像头原始图像
+        # 订阅摄像头压缩图像（与 vision_node/camera_node 发布格式一致）
         self.sub = self.create_subscription(
-            Image, '/camera/image_raw', self.image_callback, 10)
+            CompressedImage, '/camera/image_raw/compressed',
+            self.image_callback, 10)
 
-    def image_callback(self, msg: Image):
-        """对单帧图像执行目标检测并发布结果"""
-        cv_image = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
+    def image_callback(self, msg: CompressedImage):
+        """对单帧压缩 JPEG 图像执行目标检测并发布结果"""
+        np_arr = np.frombuffer(msg.data, dtype=np.uint8)
+        cv_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        if cv_image is None:
+            self.get_logger().warn('JPEG 解码失败，丢弃该帧')
+            return
         results = self.model(cv_image, verbose=False)[0]
 
         detections = Detection2DArray()

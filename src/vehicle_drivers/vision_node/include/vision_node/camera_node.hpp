@@ -13,6 +13,15 @@
 namespace vision_node
 {
 
+/// Pre-encoded frame buffer — capture thread does all the heavy lifting
+/// (YUV→BGR + JPEG encode), timer callback only publishes.
+struct FramePacket
+{
+  cv::Mat              bgr;
+  std::vector<uint8_t> jpeg;
+  rclcpp::Time         stamp;
+};
+
 class CameraNode : public rclcpp::Node
 {
 public:
@@ -27,9 +36,8 @@ private:
   cv::VideoCapture cap_;
 
   // ── Publishers ─────────────────────────────────────────────────────
-  // raw:   sensor_msgs::msg::Image (BGR8)  for local processing nodes
-  //         → YOLO / road_detector subscribe with zero decode overhead
-  // compressed: sensor_msgs::msg::CompressedImage (JPEG) for remote viz
+  // raw:       sensor_msgs::msg::Image (BGR8)  — zero-decode for local nodes
+  // compressed: sensor_msgs::msg::CompressedImage (JPEG) — remote viz
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr          pub_raw_;
   rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr pub_compressed_;
   rclcpp::TimerBase::SharedPtr timer_;
@@ -39,8 +47,8 @@ private:
   std::atomic<bool>  running_{false};
 
   // ── Frame buffer (swap pattern: short lock, no deep copy) ─────────
-  std::mutex frame_mutex_;
-  cv::Mat    latest_frame_;
+  std::mutex  frame_mutex_;
+  FramePacket latest_packet_;
 
   // ── Configuration ──────────────────────────────────────────────────
   int  width_;

@@ -9,15 +9,14 @@ namespace vision_node
 CameraNode::CameraNode(const rclcpp::NodeOptions & options)
 : Node("camera_node", options)
 {
-  // ── Declare parameters ────────────────────────────────────────────
   declare_parameter("camera_id",           0);
   declare_parameter("width",              640);
   declare_parameter("height",             480);
   declare_parameter("fps",                 30);
   declare_parameter("publish_compressed",  true);
   declare_parameter("jpeg_quality",        80);
-  declare_parameter("compressed_skip",      1);   // 1 = every frame
-  declare_parameter("fourcc",        "YUYV");     // YUYV / MJPG / empty=auto
+  declare_parameter("compressed_skip",      1);
+  declare_parameter("fourcc",        "MJPG");   // camera-side encode, no Jetson hw needed
 
   const int camera_id           = get_parameter("camera_id").as_int();
   width_                       = get_parameter("width").as_int();
@@ -33,14 +32,12 @@ CameraNode::CameraNode(const rclcpp::NodeOptions & options)
   // ── Compose FOURCC ─────────────────────────────────────────────────
   int fourcc = 0;
   if (!fourcc_str.empty()) {
-    // pad short strings with spaces so cv::VideoWriter::fourcc works
     std::string padded = fourcc_str;
     padded.resize(4, ' ');
     fourcc = cv::VideoWriter::fourcc(padded[0], padded[1], padded[2], padded[3]);
   }
 
   // ── Open camera ────────────────────────────────────────────────────
-  // V4L2 gives direct ioctl access → lower overhead than default backend
   cap_.open(camera_id, cv::CAP_V4L2);
   if (!cap_.isOpened()) {
     RCLCPP_WARN(get_logger(), "V4L2 failed for camera %d, trying default backend", camera_id);
@@ -50,27 +47,21 @@ CameraNode::CameraNode(const rclcpp::NodeOptions & options)
     throw std::runtime_error("Cannot open camera " + std::to_string(camera_id));
   }
 
-  // ── Configure capture format ───────────────────────────────────────
-  // Strategy: try requested FOURCC; if unsupported, fall back to auto
   cap_.set(cv::CAP_PROP_FRAME_WIDTH,  width_);
   cap_.set(cv::CAP_PROP_FRAME_HEIGHT, height_);
   cap_.set(cv::CAP_PROP_FPS,          fps_);
-  // Minimal buffer: cap_.read() always returns the freshest frame
   cap_.set(cv::CAP_PROP_BUFFERSIZE,   1);
 
-  bool format_ok = false;
   if (fourcc != 0) {
-    format_ok = cap_.set(cv::CAP_PROP_FOURCC, fourcc);
-    if (!format_ok) {
-      RCLCPP_WARN(get_logger(), "Requested FOURCC '%s' rejected by camera, using auto",
-                  fourcc_str.c_str());
+    bool ok = cap_.set(cv::CAP_PROP_FOURCC, fourcc);
+    if (!ok) {
+      RCLCPP_WARN(get_logger(), "FOURCC '%s' rejected, using camera default", fourcc_str.c_str());
     }
   }
 
-  // Read back actual capture settings (camera may negotiate down)
-  const double actual_w = cap_.get(cv::CAP_PROP_FRAME_WIDTH);
-  const double actual_h = cap_.get(cv::CAP_PROP_FRAME_HEIGHT);
-  const double actual_f = cap_.get(cv::CAP_PROP_FPS);
+  const double actual_w   = cap_.get(cv::CAP_PROP_FRAME_WIDTH);
+  const double actual_h   = cap_.get(cv::CAP_PROP_FRAME_HEIGHT);
+  const double actual_f   = cap_.get(cv::CAP_PROP_FPS);
   const double actual_4cc = cap_.get(cv::CAP_PROP_FOURCC);
 
   std::ostringstream fourcc_name;
@@ -80,11 +71,10 @@ CameraNode::CameraNode(const rclcpp::NodeOptions & options)
               << static_cast<char>((static_cast<int>(actual_4cc) >> 24) & 0xFF);
 
   RCLCPP_INFO(get_logger(),
-    "Camera %d opened: %.0f×%.0f @ %.1f fps  format=%s  V4L2 buffer=1",
+    "Camera %d: %.0fx%.0f @ %.1ffps  format=%s  buffer=1",
     camera_id, actual_w, actual_h, actual_f, fourcc_name.str().c_str());
 
   // ── Publishers ─────────────────────────────────────────────────────
-  // Raw BGR8 → local processing nodes (YOLO, road_detector) with zero decode cost
   pub_raw_ = create_publisher<sensor_msgs::msg::Image>(
     "/camera/image_raw", rclcpp::SensorDataQoS());
 
@@ -103,8 +93,10 @@ CameraNode::CameraNode(const rclcpp::NodeOptions & options)
 
   fps_last_log_ = now();
 
-  RCLCPP_INFO(get_logger(), "Camera node ready — raw BGR8 + %s JPEG  quality=%d",
-              publish_compressed_ ? "optional" : "no", jpeg_quality_);
+  RCLCPP_INFO(get_logger(),
+    "Camera node ready — hot path: capture→convert→encode in cap-thread, "
+    "publish in timer. JPEG encode %s (quality=%d)",
+    publish_compressed_ ? "ON" : "OFF", jpeg_quality_);
 }
 
 CameraNode::~CameraNode()
@@ -116,27 +108,31 @@ CameraNode::~CameraNode()
   cap_.release();
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// Capture thread: runs at camera frame rate.
+// Does ALL heavy lifting: YUV→BGR + optional JPEG encode.
+// Only swaps FramePacket into shared buffer at the end.
+// ═══════════════════════════════════════════════════════════════════════
 void CameraNode::captureLoop()
 {
   cv::Mat frame;
 
-  // ── Query actual pixel format once for conversion decisions ──────────
+  // Determine YUV→BGR conversion code from actual FOURCC
   const int native_fourcc = static_cast<int>(cap_.get(cv::CAP_PROP_FOURCC));
-  RCLCPP_INFO(get_logger(), "Capture pixel format FOURCC=0x%08x", native_fourcc);
-
-  // Conversion code for true 2‑channel YUV → BGR.
-  // V4L2 on Jetson / some Linux kernels auto‑converts YUYV to 3‑channel BGR
-  // before OpenCV sees the frame; we detect that by checking channels().
-  int yuv2bgr_code = cv::COLOR_YUV2BGR_YUYV;  // default YUYV
+  int yuv2bgr_code = cv::COLOR_YUV2BGR_YUYV;
   {
     const char* pf = reinterpret_cast<const char*>(&native_fourcc);
     if (memcmp(pf, "UYVY", 4) == 0) yuv2bgr_code = cv::COLOR_YUV2BGR_UYVY;
   }
+  RCLCPP_INFO(get_logger(), "Capture thread started, FOURCC=0x%08x", native_fourcc);
 
-  // ── Eager read: drain stale buffers ────────────────────────────────
-  for (int i = 0; i < 3; ++i) {
-    cap_.read(frame);
-  }
+  // JPEG encode parameters (pre-allocated)
+  const std::vector<int> jpeg_params = {cv::IMWRITE_JPEG_QUALITY, jpeg_quality_};
+
+  // Drain stale V4L2 buffers
+  for (int i = 0; i < 3; ++i) cap_.read(frame);
+
+  int encode_seq = 0;  // for compressed_skip counting
 
   while (running_) {
     if (!cap_.read(frame) || frame.empty()) {
@@ -144,69 +140,74 @@ void CameraNode::captureLoop()
       continue;
     }
 
-    // ── Convert to BGR8 if the raw frame is truly 2‑channel YUV ──────
-    // V4L2 may already deliver 3‑channel BGR (driver auto‑conversion),
-    // in which case we pass through without conversion.
+    // ── Step 1: YUV→BGR conversion ───────────────────────────────────
     cv::Mat bgr;
     const int channels = frame.channels();
     if (channels == 2) {
-      // True packed YUV 4:2:2 → convert to BGR
       cv::cvtColor(frame, bgr, yuv2bgr_code);
     } else if (channels == 1) {
-      // Grayscale → expand to BGR
       cv::cvtColor(frame, bgr, cv::COLOR_GRAY2BGR);
     } else {
-      // Already 3+ channels (V4L2 driver auto‑converted, or MJPEG decoded)
       bgr = frame;
     }
 
-    // ── Swap into shared buffer (lock held briefly) ──────────────────
+    // ── Step 2: optional JPEG encoding (the expensive part) ──────────
+    std::vector<uint8_t> jpeg;
+    if (publish_compressed_) {
+      encode_seq++;
+      if ((encode_seq % compressed_skip_) == 0) {
+        cv::imencode(".jpg", bgr, jpeg, jpeg_params);
+      }
+    }
+
+    // ── Step 3: swap pre-encoded packet into shared buffer ───────────
     {
+      FramePacket pkt;
+      cv::swap(pkt.bgr, bgr);
+      pkt.jpeg = std::move(jpeg);
+      pkt.stamp = now();
+
       std::lock_guard<std::mutex> lock(frame_mutex_);
-      cv::swap(latest_frame_, bgr);
+      std::swap(latest_packet_, pkt);
     }
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// Timer callback: runs at target FPS.
+// Only does lightweight work — swap out pre-encoded packet, publish.
+// JPEG encoding was already done by the capture thread.
+// ═══════════════════════════════════════════════════════════════════════
 void CameraNode::publishCallback()
 {
-  // ── Swap frame out of the shared buffer ────────────────────────────
-  cv::Mat frame;
+  FramePacket pkt;
   {
     std::lock_guard<std::mutex> lock(frame_mutex_);
-    if (latest_frame_.empty()) return;
-    cv::swap(frame, latest_frame_);
+    if (latest_packet_.bgr.empty()) return;
+    pkt = std::move(latest_packet_);
+    // latest_packet_ is now empty — capture thread will fill a fresh one
   }
 
-  const auto stamp = now();
-
-  // ── Publish raw BGR8 Image (primary — zero-overhead for local nodes) ──
+  // ── Publish raw BGR8 Image ─────────────────────────────────────────
   sensor_msgs::msg::Image raw_msg;
-  raw_msg.header.stamp    = stamp;
+  raw_msg.header.stamp    = pkt.stamp;
   raw_msg.header.frame_id = "camera_link";
-  raw_msg.height          = frame.rows;
-  raw_msg.width           = frame.cols;
+  raw_msg.height          = pkt.bgr.rows;
+  raw_msg.width           = pkt.bgr.cols;
   raw_msg.encoding        = "bgr8";
   raw_msg.is_bigendian    = false;
-  raw_msg.step            = static_cast<uint32_t>(frame.step);
-  raw_msg.data.assign(frame.datastart, frame.dataend);
+  raw_msg.step            = static_cast<uint32_t>(pkt.bgr.step);
+  raw_msg.data.assign(pkt.bgr.datastart, pkt.bgr.dataend);
   pub_raw_->publish(std::move(raw_msg));
 
-  // ── Optional compressed JPEG (remote viewing / bandwidth-limited links) ──
-  if (publish_compressed_ && pub_compressed_) {
-    compressed_count_++;
-    if ((compressed_count_ % compressed_skip_) == 0) {
-      std::vector<uint8_t> buf;
-      std::vector<int> params = {cv::IMWRITE_JPEG_QUALITY, jpeg_quality_};
-      if (cv::imencode(".jpg", frame, buf, params)) {
-        sensor_msgs::msg::CompressedImage comp_msg;
-        comp_msg.header.stamp = stamp;
-        comp_msg.header.frame_id = "camera_link";
-        comp_msg.format = "jpeg";
-        comp_msg.data   = std::move(buf);
-        pub_compressed_->publish(std::move(comp_msg));
-      }
-    }
+  // ── Publish compressed JPEG (already encoded by capture thread) ────
+  if (publish_compressed_ && pub_compressed_ && !pkt.jpeg.empty()) {
+    sensor_msgs::msg::CompressedImage comp_msg;
+    comp_msg.header.stamp    = pkt.stamp;
+    comp_msg.header.frame_id = "camera_link";
+    comp_msg.format          = "jpeg";
+    comp_msg.data            = std::move(pkt.jpeg);
+    pub_compressed_->publish(std::move(comp_msg));
   }
 
   // ── Periodic FPS log ───────────────────────────────────────────────
@@ -214,10 +215,9 @@ void CameraNode::publishCallback()
   const auto now_t = now();
   const double elapsed = (now_t - fps_last_log_).seconds();
   if (elapsed >= 5.0) {
-    const double actual_fps = frame_count_ / elapsed;
-    RCLCPP_INFO(get_logger(), "Camera FPS: %.1f  (target %d)  raw topic + %s",
-                actual_fps, fps_,
-                (publish_compressed_ && pub_compressed_) ? "compressed" : "raw-only");
+    RCLCPP_INFO(get_logger(), "Publish FPS: %.1f  (target %d)  %s",
+                frame_count_ / elapsed, fps_,
+                publish_compressed_ ? "+JPEG" : "raw-only");
     frame_count_ = 0;
     fps_last_log_ = now_t;
   }

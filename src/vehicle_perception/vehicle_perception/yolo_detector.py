@@ -147,11 +147,11 @@ class YoloDetector(Node):
             # On Jetson: auto-export hint for TensorRT
             if self.device != 'cpu' and not self.engine_path:
                 self.get_logger().info(
-                    'Tip: export to TensorRT for 2–3× faster inference on Jetson:\n'
+                    'Tip: export to TensorRT for 2-3x faster inference on Jetson:\n'
                     '  python3 -c "from ultralytics import YOLO; '
                     'm=YOLO(\'yolov8n.pt\'); '
                     f'm.export(format=\'engine\', device=0, half={self.half_precision}, '
-                    f'imgsz={self.input_size})"'
+                    f'imgsz={self.input_size})"')
 
         self.get_logger().info(f'Model classes: {list(self.model.names.values())[:5]}... '
                                f'({len(self.model.names)} total)')

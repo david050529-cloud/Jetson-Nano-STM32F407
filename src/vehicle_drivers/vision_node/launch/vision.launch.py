@@ -38,8 +38,8 @@ def generate_launch_description():
             'fps', default_value='30',
             description='Target frames per second'),
         DeclareLaunchArgument(
-            'fourcc', default_value='YUYV',
-            description='Pixel format: YUYV(raw) / MJPG(compressed) / empty=auto'),
+            'fourcc', default_value='MJPG',
+            description='Pixel format: MJPG(camera-side encode, best FPS) / YUYV(raw) / empty=auto'),
         DeclareLaunchArgument(
             'publish_compressed', default_value='true',
             description='Publish /camera/image_raw/compressed in addition to raw'),

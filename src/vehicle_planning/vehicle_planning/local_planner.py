@@ -24,8 +24,8 @@
   订阅：/planning/global_path         (nav_msgs/Path)          — 全局路径(含属性)
         /localization/odometry         (nav_msgs/Odometry)       — 里程计位姿
         /scan                          (sensor_msgs/LaserScan)   — 激光雷达扫描
-        /perception/road_type          (std_msgs/String)         — 道路类型
-        /perception/traffic_signs      (vision_msgs/Detection2DArray) — 交通标志
+        /perception/road_signs         (vision_msgs/Detection2DArray)
+                                       — 道路信号: 斑马线 Zebra + 红/绿/黄交通灯
   发布：/motor_commands               (stm32_serial_bridge/MotorCommand) — 电机舵机
         /planning/current_waypoint_index (std_msgs/Int32)        — 路点进度反馈
         /planning/replan_request       (std_msgs/Int32)          — 重规划请求
@@ -39,7 +39,7 @@ from rclpy.node import Node
 from nav_msgs.msg import Path, Odometry
 from sensor_msgs.msg import LaserScan
 from vision_msgs.msg import Detection2DArray
-from std_msgs.msg import String, Int32
+from std_msgs.msg import Int32
 
 from stm32_serial_bridge.msg import MotorCommand
 
@@ -58,14 +58,13 @@ ATTR_U_TURN      = 7   # 掉头
 ATTR_PARK        = 8   # 泊车
 
 # ══════════════════════════════════════════════════════════════════════════
-# 交通标志类别名称（须与 YOLO 模型输出的 class_id 字符串一致）
-# 根据实际训练模型调整此处的名称
+# 交通信号类别名称（须与 best.pt 模型输出的 class_id 字符串一致）
+# best.pt 类别: {0: 'Zebra', 1: 'green', 2: 'red', 3: 'yellow'}
 # ══════════════════════════════════════════════════════════════════════════
-SIGN_RED_LIGHT    = 'red_light'     # 红灯
-SIGN_GREEN_LIGHT  = 'green_light'   # 绿灯
-SIGN_STOP         = 'stop_sign'     # 停止标志
-SIGN_NO_ENTRY     = 'no_entry'      # 禁止进入
-SIGN_PEDESTRIAN   = 'pedestrian'    # 行人横道（预留）
+SIGN_RED_LIGHT    = 'red'           # 红灯
+SIGN_GREEN_LIGHT  = 'green'         # 绿灯
+SIGN_YELLOW_LIGHT = 'yellow'        # 黄灯
+SIGN_ZEBRA        = 'Zebra'         # 斑马线 / 人行横道
 
 # ══════════════════════════════════════════════════════════════════════════
 # 驾驶状态机枚举
@@ -128,10 +127,9 @@ class LocalPlanner(Node):
             Odometry, '/localization/odometry', self._odom_callback, 10)
         self.sub_scan = self.create_subscription(
             LaserScan, '/scan', self._scan_callback, 10)
-        self.sub_road = self.create_subscription(
-            String, '/perception/road_type', self._road_callback, 10)
+        # 道路信号(斑马线 + 红/绿/黄交通灯)，由 road_detector 基于 best.pt 发布
         self.sub_signs = self.create_subscription(
-            Detection2DArray, '/perception/traffic_signs',
+            Detection2DArray, '/perception/road_signs',
             self._sign_callback, 10)
 
         # ── 发布器 ────────────────────────────────────────────────────────
@@ -154,7 +152,8 @@ class LocalPlanner(Node):
         self.sector_dists: list = [float('inf')] * 8
 
         # ── 道路与速度 ────────────────────────────────────────────────────
-        self.road_type  = 'paved'        # 当前道路类型
+        # best.pt 不再判断铺装/非铺装，速度上限统一使用 SPEED_NORMAL；
+        # 若未来恢复路面分类，可在此重新引入 road_type 与 SPEED_OFFROAD。
         self.max_speed  = self.SPEED_NORMAL
 
         # ── 交通标志状态 ──────────────────────────────────────────────────
@@ -236,21 +235,10 @@ class LocalPlanner(Node):
 
         self.sector_dists = new_dists
 
-    def _road_callback(self, msg: String):
-        """
-        根据道路检测结果调整最大速度上限
-        铺装路面(paved)：使用 SPEED_NORMAL
-        非铺装路面(unpaved):限速至 SPEED_OFFROAD
-        """
-        self.road_type = msg.data
-        self.max_speed = (self.SPEED_OFFROAD
-                          if self.road_type == 'unpaved'
-                          else self.SPEED_NORMAL)
-
     def _sign_callback(self, msg: Detection2DArray):
         """
-        接收交通标志检测结果，仅保留置信度 > 0.6 的检测
-        检测结果在下一个控制周期中被 _process_traffic_signs 消费
+        接收道路信号检测结果（来自 road_detector + best.pt）
+        仅保留置信度 > 0.6 的检测，结果在下一控制周期被 _process_traffic_signs 消费
         """
         self.detected_signs = []
         for det in msg.detections:
@@ -477,15 +465,16 @@ class LocalPlanner(Node):
 
     def _process_traffic_signs(self, dt: float):
         """
-        处理交通标志检测结果，更新停车等待状态
+        处理道路信号检测结果(best.pt 输出)，更新停车等待状态
 
         停车触发条件：
-          - 检测到红灯（SIGN_RED_LIGHT）：停车，等待绿灯或超时（30秒）
-          - 检测到停止牌（SIGN_STOP）   ：停车等待 3 秒后继续
+          - 检测到红灯(SIGN_RED_LIGHT)   ：停车,等待绿灯或超时(30秒)
+          - 检测到黄灯(SIGN_YELLOW_LIGHT)：保守起见停车 5 秒
+          - 检测到斑马线(SIGN_ZEBRA)     ：礼让行人,停车 3 秒后继续
 
         停车解除条件：
-          - 检测到绿灯（SIGN_GREEN_LIGHT）：立即解除停车
-          - 等待超时（traffic_stop_max 秒）：超时解除（防止永久停车）
+          - 检测到绿灯(SIGN_GREEN_LIGHT)：立即解除停车
+          - 等待超时(traffic_stop_max 秒)：超时解除(防止永久停车)
         """
         if self.traffic_stop_active:
             # 当前处于停车等待，累计等待时间
@@ -505,21 +494,23 @@ class LocalPlanner(Node):
                 self.get_logger().info(
                     f'停车超时 ({self.traffic_stop_max:.0f}s)，强制恢复行驶')
         else:
-            # 检查是否需要触发停车
-            for sign in self.detected_signs:
-                cls = sign['class']
-                if cls == SIGN_RED_LIGHT:
-                    self.traffic_stop_active = True
-                    self.traffic_stop_timer  = 0.0
-                    self.traffic_stop_max    = 30.0   # 红灯最长等待30秒
-                    self.get_logger().info('检测到红灯，停车等待')
-                    break
-                elif cls == SIGN_STOP:
-                    self.traffic_stop_active = True
-                    self.traffic_stop_timer  = 0.0
-                    self.traffic_stop_max    = 3.0    # 停止牌等待3秒
-                    self.get_logger().info('检测到停止标志，停车3秒')
-                    break
+            # 检查是否需要触发停车（红灯优先级高于黄灯/斑马线）
+            classes = {s['class'] for s in self.detected_signs}
+            if SIGN_RED_LIGHT in classes:
+                self.traffic_stop_active = True
+                self.traffic_stop_timer  = 0.0
+                self.traffic_stop_max    = 30.0   # 红灯最长等待30秒
+                self.get_logger().info('检测到红灯，停车等待')
+            elif SIGN_YELLOW_LIGHT in classes:
+                self.traffic_stop_active = True
+                self.traffic_stop_timer  = 0.0
+                self.traffic_stop_max    = 5.0    # 黄灯保守停车 5 秒
+                self.get_logger().info('检测到黄灯，停车等待')
+            elif SIGN_ZEBRA in classes:
+                self.traffic_stop_active = True
+                self.traffic_stop_timer  = 0.0
+                self.traffic_stop_max    = 3.0    # 斑马线礼让 3 秒
+                self.get_logger().info('检测到斑马线，礼让行人停车 3 秒')
 
     # ══════════════════════════════════════════════════════════════════════
     # 状态机处理函数

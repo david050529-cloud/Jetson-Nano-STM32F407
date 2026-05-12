@@ -11,9 +11,9 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         # 将 config 目录下的模型文件安装到 share/vehicle_perception/config/
+        # best.pt: 同时检测斑马线(Zebra)与红/绿/黄交通灯，供 road_detector 使用
         ('share/' + package_name + '/config', [
-            'config/road_seg_model.pt',
-            'config/sign_yolo_model.pt',
+            'config/best.pt',
         ]),
     ],
     install_requires=['setuptools'],
@@ -30,8 +30,10 @@ setup(
     entry_points={
         'console_scripts': [
             'obstacle_detector = vehicle_perception.obstacle_detector:main',
-            'traffic_light_detector = vehicle_perception.traffic_light_detector:main',
-            'road_detector = vehicle_perception.road_detector:main', 
+            # road_detector 现在基于 best.pt 同时输出斑马线与红/绿/黄交通灯，
+            # 已覆盖原 traffic_sign_detector 的交通灯职能；如需恢复独立的交通
+            # 标志检测器，需要先在 config/ 下提供对应的模型文件并重新注册。
+            'road_detector = vehicle_perception.road_detector:main',
         ],
     },
 )

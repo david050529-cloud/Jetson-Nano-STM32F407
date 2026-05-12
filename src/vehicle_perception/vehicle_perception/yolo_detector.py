@@ -78,10 +78,23 @@ class YoloDetector(Node):
         self.processing_skip  = int(self.get_parameter('processing_skip').value)
         self.engine_path      = self.get_parameter('engine_path').value
 
-        # Resolve model path
+        # Resolve model path — try multiple locations
         model_path = self.get_parameter('model_path').value
         if not os.path.isabs(model_path):
-            model_path = os.path.join(os.getcwd(), model_path)
+            # Try: 1) package share  2) cwd  3) home
+            candidates = []
+            try:
+                from ament_index_python.packages import get_package_share_directory
+                candidates.append(os.path.join(
+                    get_package_share_directory('vehicle_perception'),
+                    'config', model_path))
+            except Exception:
+                pass
+            candidates.append(os.path.join(os.getcwd(), model_path))
+            candidates.append(os.path.join(os.path.expanduser('~'), model_path))
+            # pick the first that exists; fall back to cwd path (auto-download will rescue)
+            model_path = next((p for p in candidates if os.path.exists(p)),
+                              candidates[1] if len(candidates) > 1 else candidates[0])
 
         # Resolve device
         if self.device == 'auto':
@@ -92,7 +105,6 @@ class YoloDetector(Node):
                 self.device = 'cpu'
 
         # ── Load model ─────────────────────────────────────────────────
-        self.get_logger().info(f'Loading YOLO model: {model_path}')
         self.get_logger().info(f'Device: {self.device}  FP16: {self.half_precision}  '
                                f'Input: {self.input_size}  Conf: {self.conf_threshold}')
 
@@ -101,17 +113,45 @@ class YoloDetector(Node):
             self.get_logger().info(f'Using TensorRT engine: {self.engine_path}')
             self.model = YOLO(self.engine_path, task='detect')
         else:
-            self.model = YOLO(model_path, task='detect')
-            # On Jetson: auto-export to TensorRT if CUDA available (first run slow,
-            # subsequent runs load cached .engine)
+            # Try local model file first
+            model_loaded = False
+            if os.path.exists(model_path):
+                self.get_logger().info(f'Loading YOLO model: {model_path}')
+                try:
+                    self.model = YOLO(model_path, task='detect')
+                    model_loaded = True
+                except Exception as e:
+                    self.get_logger().warn(
+                        f'Failed to load {model_path}: {e}\n'
+                        f'  File may be corrupted — trying auto-download...')
+                    # Remove the bad file so it doesn't block future attempts
+                    try:
+                        os.remove(model_path)
+                    except OSError:
+                        pass
+
+            if not model_loaded:
+                # Auto-download from ultralytics (yolov8n.pt ≈ 6 MB)
+                self.get_logger().info(
+                    f'Downloading yolov8n.pt from ultralytics (one-time)...')
+                try:
+                    self.model = YOLO('yolov8n.pt', task='detect')
+                except Exception as e2:
+                    self.get_logger().fatal(
+                        f'Cannot load or download YOLO model: {e2}')
+                    raise RuntimeError(
+                        'YOLO model unavailable. Place a valid yolov8n.pt in '
+                        'the workspace root or ensure internet access for '
+                        'auto-download.') from e2
+
+            # On Jetson: auto-export hint for TensorRT
             if self.device != 'cpu' and not self.engine_path:
                 self.get_logger().info(
-                    'Tip: export model to TensorRT for faster inference on Jetson:\n'
-                    '  from ultralytics import YOLO\n'
-                    '  model = YOLO("yolov8n.pt")\n'
-                    f'  model.export(format="engine", device=0, half={self.half_precision}, '
-                    f'imgsz={self.input_size})'
-                )
+                    'Tip: export to TensorRT for 2–3× faster inference on Jetson:\n'
+                    '  python3 -c "from ultralytics import YOLO; '
+                    'm=YOLO(\'yolov8n.pt\'); '
+                    f'm.export(format=\'engine\', device=0, half={self.half_precision}, '
+                    f'imgsz={self.input_size})"'
 
         self.get_logger().info(f'Model classes: {list(self.model.names.values())[:5]}... '
                                f'({len(self.model.names)} total)')

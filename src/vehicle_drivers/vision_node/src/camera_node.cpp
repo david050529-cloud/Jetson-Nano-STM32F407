@@ -120,6 +120,19 @@ void CameraNode::captureLoop()
 {
   cv::Mat frame;
 
+  // ── Query actual pixel format once for conversion decisions ──────────
+  const int native_fourcc = static_cast<int>(cap_.get(cv::CAP_PROP_FOURCC));
+  RCLCPP_INFO(get_logger(), "Capture pixel format FOURCC=0x%08x", native_fourcc);
+
+  // Conversion code for true 2‑channel YUV → BGR.
+  // V4L2 on Jetson / some Linux kernels auto‑converts YUYV to 3‑channel BGR
+  // before OpenCV sees the frame; we detect that by checking channels().
+  int yuv2bgr_code = cv::COLOR_YUV2BGR_YUYV;  // default YUYV
+  {
+    const char* pf = reinterpret_cast<const char*>(&native_fourcc);
+    if (memcmp(pf, "UYVY", 4) == 0) yuv2bgr_code = cv::COLOR_YUV2BGR_UYVY;
+  }
+
   // ── Eager read: drain stale buffers ────────────────────────────────
   for (int i = 0; i < 3; ++i) {
     cap_.read(frame);
@@ -131,24 +144,19 @@ void CameraNode::captureLoop()
       continue;
     }
 
-    // YUYV → BGR conversion (SIMD-accelerated via OpenCV).
-    // If the camera delivers raw BGR already (rare), cvtColor is cheap.
-    // MJPEG frames are decoded by OpenCV's libjpeg inside cap_.read().
+    // ── Convert to BGR8 if the raw frame is truly 2‑channel YUV ──────
+    // V4L2 may already deliver 3‑channel BGR (driver auto‑conversion),
+    // in which case we pass through without conversion.
     cv::Mat bgr;
-    const int native_fourcc = static_cast<int>(cap_.get(cv::CAP_PROP_FOURCC));
-    const char* pf = reinterpret_cast<const char*>(&native_fourcc);
-
-    // ── Convert to BGR8 if needed ────────────────────────────────────
-    if (memcmp(pf, "YUYV", 4) == 0 || memcmp(pf, "YVYU", 4) == 0 ||
-        memcmp(pf, "UYVY", 4) == 0 || memcmp(pf, "Y42B", 4) == 0) {
-      cv::cvtColor(frame, bgr,
-        memcmp(pf, "UYVY", 4) == 0 ? cv::COLOR_YUV2BGR_UYVY :
-                                      cv::COLOR_YUV2BGR_YUYV);
-    } else if (memcmp(pf, "MJPG", 4) == 0) {
-      // MJPEG — frame is already BGR after cap_.read() via libjpeg
-      bgr = frame;
+    const int channels = frame.channels();
+    if (channels == 2) {
+      // True packed YUV 4:2:2 → convert to BGR
+      cv::cvtColor(frame, bgr, yuv2bgr_code);
+    } else if (channels == 1) {
+      // Grayscale → expand to BGR
+      cv::cvtColor(frame, bgr, cv::COLOR_GRAY2BGR);
     } else {
-      // Unknown format — assume BGR; if wrong, downstream nodes will see garbage
+      // Already 3+ channels (V4L2 driver auto‑converted, or MJPEG decoded)
       bgr = frame;
     }
 
